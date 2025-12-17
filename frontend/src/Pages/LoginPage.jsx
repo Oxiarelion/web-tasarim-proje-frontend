@@ -1,9 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import "../Styles/LoginPage.css"; // CSS dosyanın adı Login.css ise böyle kalsın
+import "../Styles/LoginPage.css";
 
 const LoginPage = () => {
-  // İsim LoginPage oldu
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -33,12 +32,20 @@ const LoginPage = () => {
       if (data.basarili) {
         setMesaj("✅ " + data.mesaj);
 
+        // --- YENİ EKLENDİ: TOKEN VE USER BİLGİSİNİ KAYDET ---
+        if (data.token) {
+          localStorage.setItem("token", data.token); // Token'ı kaydet
+        }
+        if (data.user) {
+          localStorage.setItem("user", JSON.stringify(data.user)); // Kullanıcıyı kaydet
+        }
+
         // Yönlendirme
         setTimeout(() => {
           navigate("/anasayfa");
         }, 1000);
       } else {
-        setMesaj("❌ " + "Şifre veya e-posta hatalı.");
+        setMesaj("❌ " + (data.mesaj || "Şifre veya e-posta hatalı."));
       }
     } catch (error) {
       console.error(error);
@@ -79,8 +86,6 @@ const LoginPage = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
-          {/* ... Inputlar aynı ... */}
-          {/* Kısalık olsun diye inputları özet geçiyorum, senin kodundaki gibi kalabilir */}
           <div className="input-group">
             <div className="input-icon">
               <svg
@@ -200,4 +205,4 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage; // Export ismini de güncelledik
+export default LoginPage;

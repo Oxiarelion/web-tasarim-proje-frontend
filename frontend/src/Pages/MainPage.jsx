@@ -28,13 +28,42 @@ const MainPage = () => {
     "ARA",
   ];
 
+  // --- 1. GÜVENLİK KONTROLÜ (YENİ EKLENDİ) ---
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      // Token yoksa seni buraya sokmam, giriş yap!
+      navigate("/");
+    }
+  }, [navigate]);
+
+  // --- 2. ÇIKIŞ YAP (GÜNCELLENDİ: Token Siler) ---
   const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     navigate("/");
   };
 
+  // --- 3. BACKEND'DEN VERİ ÇEKME (GÜNCELLENDİ: Token Header Ekler) ---
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/etkinlikler")
-      .then((response) => response.json())
+    const token = localStorage.getItem("token");
+    if (!token) return; // Token yoksa zaten yukarıdaki kod atacak
+
+    fetch("http://127.0.0.1:8000/api/etkinlikler", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`, // <-- İŞTE BU SATIR ÇOK ÖNEMLİ
+      },
+    })
+      .then((response) => {
+        if (response.status === 401) {
+          // Token süresi dolmuş veya geçersiz
+          handleLogout();
+          throw new Error("Oturum süresi doldu");
+        }
+        return response.json();
+      })
       .then((data) => {
         if (data.basarili && Array.isArray(data.etkinlikler)) {
           setDbEtkinlikler(data.etkinlikler);
@@ -45,6 +74,7 @@ const MainPage = () => {
       .catch((error) => console.error("API Bağlantı Hatası:", error));
   }, []);
 
+  // --- RESMİ TATİLLER API (DEĞİŞMEDİ) ---
   useEffect(() => {
     fetch("https://date.nager.at/api/v3/PublicHolidays/2025/TR")
       .then((res) => res.json())
@@ -54,7 +84,7 @@ const MainPage = () => {
 
   const toggleMenu = () => setMenuAcik(!menuAcik);
 
-  // --- GÜNCELLENEN TAKVİM İŞARETLEME MANTIĞI ---
+  // --- TAKVİM İŞARETLEME MANTIĞI (DEĞİŞMEDİ) ---
   const tileContent = ({ date, view }) => {
     if (view === "month") {
       const yil = date.getFullYear();
@@ -62,26 +92,19 @@ const MainPage = () => {
       const gun = String(date.getDate()).padStart(2, "0");
       const yerelTarih = `${yil}-${ay}-${gun}`;
 
-      // 1. Resmi Tatil Kontrolü
       const tatilVarMi = tatiller.find((t) => t.date === yerelTarih);
-
-      // 2. Bizim Etkinlik Kontrolü
       const etkinlikVarMi = dbEtkinlikler.find((e) => e.date === yerelTarih);
 
-      // Eğer ikisi de yoksa boş dön
       if (!tatilVarMi && !etkinlikVarMi) return null;
 
       return (
         <div className="takvim-nokta-container">
-          {/* Tatil varsa KIRMIZI nokta */}
           {tatilVarMi && (
             <div
               className="tatil-noktasi"
               title={`Tatil: ${tatilVarMi.localName}`}
             ></div>
           )}
-
-          {/* Etkinlik varsa SARI nokta */}
           {etkinlikVarMi && (
             <div className="etkinlik-noktasi" title="Etkinlik Var"></div>
           )}

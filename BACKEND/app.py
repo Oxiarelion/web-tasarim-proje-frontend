@@ -9,9 +9,10 @@ from sanic import Sanic
 from sanic.response import json, text
 from sanic_cors import CORS
 import secrets, smtplib, asyncio
+import jwt  # <-- YENİ EKLENDİ: JWT Kütüphanesi
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from functools import partial
+from functools import partial, wraps  # <-- YENİ EKLENDİ: wraps
 from tortoise import Tortoise, connections
 from models import (
     User, UserProfile, Event, FavouriteEvent, Feedback,
@@ -20,6 +21,43 @@ from models import (
 
 app = Sanic("Campushub06")
 CORS(app)
+
+# --- YENİ EKLENDİ: GİZLİ ANAHTAR ---
+# Tokenları imzalamak için kullanılır. Prodüksiyonda .env dosyasından çekilmelidir.
+SECRET_KEY = os.getenv("SECRET_KEY", "bu_cok_gizli_ve_uzun_bir_sifredir_kimse_bilmemeli_12345")
+
+# -------------------------------------------------
+# YENİ EKLENDİ: TOKEN KONTROL DECORATOR'I (Middleware)
+# -------------------------------------------------
+def authorized():
+    def decorator(f):
+        @wraps(f)
+        async def decorated_function(request, *args, **kwargs):
+            # 1. Header'dan Token'ı al
+            token = None
+            if "Authorization" in request.headers:
+                try:
+                    # Gelen format: "Bearer <token>"
+                    token = request.headers["Authorization"].split(" ")[1]
+                except IndexError:
+                    return json({"basarili": False, "mesaj": "Token formatı hatalı."}, status=401)
+            
+            if not token:
+                return json({"basarili": False, "mesaj": "Token bulunamadı. Giriş yapmalısınız."}, status=401)
+
+            try:
+                # 2. Token'ı çöz ve doğrula
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                # Kullanıcı ID'sini request içine ekle (ileride lazım olursa request.ctx.user_id ile alabilirsin)
+                request.ctx.user_id = payload["user_id"]
+            except jwt.ExpiredSignatureError:
+                return json({"basarili": False, "mesaj": "Oturum süresi doldu. Tekrar giriş yapın."}, status=401)
+            except jwt.InvalidTokenError:
+                return json({"basarili": False, "mesaj": "Geçersiz token."}, status=401)
+
+            return await f(request, *args, **kwargs)
+        return decorated_function
+    return decorator
 
 # -------------------------------------------------
 # ORM init/close
@@ -75,56 +113,16 @@ def send_email_sync(email, reset_link):
 # SSS Verileri (memory)
 # -------------------------------------------------
 FAQ_ITEMS = [
-    {
-        "id": 1,
-        "question": "CampusHub Ankara nedir?",
-        "answer": "CampusHub Ankara, Ankara’daki üniversitelerde gerçekleşen etkinlikleri tek bir platformda toplayan öğrenci odaklı bir etkinlik keşif uygulamasıdır."
-    },
-    {
-        "id": 2,
-        "question": "Etkinlikleri nereden buluyorsunuz?",
-        "answer": "Etkinlikler üniversitelerin resmi web siteleri, kulüp sayfaları ve sosyal medya hesapları üzerinden toplanarak listelenmektedir."
-    },
-    {
-        "id": 3,
-        "question": "Bir etkinliği takvime nasıl eklerim?",
-        "answer": "Etkinlik detay sayfasında bulunan 'Takvime Ekle' butonuna tıklayarak etkinliği kişisel takviminize ekleyebilirsiniz."
-    },
-    {
-        "id": 4,
-        "question": "CampusHub Ankara’ya üye olmam gerekiyor mu?",
-        "answer": "Çoğu etkinliği görmek için üyelik gerekmez. Ancak etkinlik kaydetme ve favorileme gibi özellikler için üye olmanız gerekir."
-    },
-    {
-        "id": 5,
-        "question": "Üyelik ücretli mi?",
-        "answer": "Hayır. CampusHub Ankara tamamen ücretsiz bir platformdur."
-    },
-    {
-        "id": 6,
-        "question": "Yanlış listelenen bir etkinliği nasıl bildiririm?",
-        "answer": "Etkinlik detay sayfasındaki 'Hata Bildir' butonunu kullanarak bize ulaşabilirsiniz."
-    },
-    {
-        "id": 7,
-        "question": "Etkinlikler sadece Ankara için mi?",
-        "answer": "Şu an sadece Ankara için hizmet veriyoruz. İleride diğer şehirleri de eklemeyi planlıyoruz."
-    },
-    {
-        "id": 8,
-        "question": "Kendi kulübümün etkinliğini nasıl ekleyebilirim?",
-        "answer": "Yakında kulüpler için 'Organizatör Paneli' eklenecek. Şimdilik 'Etkinlik Ekle' formu üzerinden bize ulaşabilirsiniz."
-    },
-    {
-        "id": 9,
-        "question": "Verilerimi nasıl saklıyorsunuz?",
-        "answer": "Kullanıcı verileri güvenli sunucularda ve KVKK’ya uygun şekilde saklanmaktadır."
-    },
-    {
-        "id": 10,
-        "question": "Mobil uygulamanız var mı?",
-        "answer": "Şu an mobil uyumlu web sitemiz var. İleride Android ve iOS uygulamaları da yayınlamayı planlıyoruz."
-    },
+    { "id": 1, "question": "CampusHub Ankara nedir?", "answer": "CampusHub Ankara, Ankara’daki üniversitelerde gerçekleşen etkinlikleri tek bir platformda toplayan öğrenci odaklı bir etkinlik keşif uygulamasıdır." },
+    { "id": 2, "question": "Etkinlikleri nereden buluyorsunuz?", "answer": "Etkinlikler üniversitelerin resmi web siteleri, kulüp sayfaları ve sosyal medya hesapları üzerinden toplanarak listelenmektedir." },
+    { "id": 3, "question": "Bir etkinliği takvime nasıl eklerim?", "answer": "Etkinlik detay sayfasında bulunan 'Takvime Ekle' butonuna tıklayarak etkinliği kişisel takviminize ekleyebilirsiniz." },
+    { "id": 4, "question": "CampusHub Ankara’ya üye olmam gerekiyor mu?", "answer": "Çoğu etkinliği görmek için üyelik gerekmez. Ancak etkinlik kaydetme ve favorileme gibi özellikler için üye olmanız gerekir." },
+    { "id": 5, "question": "Üyelik ücretli mi?", "answer": "Hayır. CampusHub Ankara tamamen ücretsiz bir platformdur." },
+    { "id": 6, "question": "Yanlış listelenen bir etkinliği nasıl bildiririm?", "answer": "Etkinlik detay sayfasındaki 'Hata Bildir' butonunu kullanarak bize ulaşabilirsiniz." },
+    { "id": 7, "question": "Etkinlikler sadece Ankara için mi?", "answer": "Şu an sadece Ankara için hizmet veriyoruz. İleride diğer şehirleri de eklemeyi planlıyoruz." },
+    { "id": 8, "question": "Kendi kulübümün etkinliğini nasıl ekleyebilirim?", "answer": "Yakında kulüpler için 'Organizatör Paneli' eklenecek. Şimdilik 'Etkinlik Ekle' formu üzerinden bize ulaşabilirsiniz." },
+    { "id": 9, "question": "Verilerimi nasıl saklıyorsunuz?", "answer": "Kullanıcı verileri güvenli sunucularda ve KVKK’ya uygun şekilde saklanmaktadır." },
+    { "id": 10, "question": "Mobil uygulamanız var mı?", "answer": "Şu an mobil uyumlu web sitemiz var. İleride Android ve iOS uygulamaları da yayınlamayı planlıyoruz." },
 ]
 
 
@@ -137,7 +135,7 @@ async def home(request):
 
 
 # -------------------------------------------------
-# Kayıt Ol -> User + UserProfile (ŞİFRE DÜZ METİN)
+# Kayıt Ol
 # -------------------------------------------------
 @app.post("/api/kayit-ol")
 async def kayit_ol(request):
@@ -163,7 +161,7 @@ async def kayit_ol(request):
 
 
 # -------------------------------------------------
-# Giriş (ŞİFRE DÜZ METİN)
+# Giriş (GÜNCELLENDİ: ARTIK TOKEN VERİYOR)
 # -------------------------------------------------
 @app.post("/api/giris")
 async def giris(request):
@@ -181,14 +179,31 @@ async def giris(request):
     if user.password != password:
         return json({"basarili": False, "mesaj": "Şifre yanlış."}, status=401)
 
-    user.last_login = datetime.now()
-    #await user.save(update_fields=["last_login"])
+    # --- YENİ EKLENDİ: TOKEN OLUŞTURMA ---
+    # Token 24 saat geçerli olsun
+    expiration_time = datetime.now(timezone.utc) + timedelta(hours=24)
+    token_payload = {
+        "user_id": user.user_id,
+        "email": user.email,
+        "exp": expiration_time
+    }
+    
+    # Token'ı şifrele
+    token = jwt.encode(token_payload, SECRET_KEY, algorithm="HS256")
 
-    return json({"basarili": True, "mesaj": "Hoş geldin!"}, status=200)
+    user.last_login = datetime.now()
+    # await user.save(update_fields=["last_login"])
+
+    return json({
+        "basarili": True, 
+        "mesaj": "Hoş geldin!",
+        "token": token,  # <-- Token'ı frontend'e gönderiyoruz
+        "user": {"email": user.email, "role": user.role} # İsteğe bağlı kullanıcı bilgisi
+    }, status=200)
 
 
 # -------------------------------------------------
-# Şifremi Unuttum (TOKENLAR KALSIN)
+# Şifremi Unuttum
 # -------------------------------------------------
 RESET_TOKENS = {}
 
@@ -220,7 +235,7 @@ async def sifremi_unuttum(request):
 
 
 # -------------------------------------------------
-# Şifre Sıfırla (ŞİFRE DÜZ METİN)
+# Şifre Sıfırla
 # -------------------------------------------------
 @app.post("/api/sifre-sifirla")
 async def sifre_sifirla(request):
@@ -251,9 +266,10 @@ async def sifre_sifirla(request):
 
 
 # -------------------------------------------------
-# Etkinlikler (YENİ VERİTABANI YAPISINA GÖRE GÜNCELLENDİ)
+# Etkinlikler (GÜNCELLENDİ: ARTIK KORUMALI)
 # -------------------------------------------------
 @app.get("/api/etkinlikler")
+@authorized()  # <-- YENİ EKLENDİ: SADECE TOKEN İLE GİRİLİR
 async def etkinlikler(request):
     print("--------------------------------------------------")
     print("📡 REACT'TAN İSTEK GELDİ: /api/etkinlikler")
@@ -261,7 +277,6 @@ async def etkinlikler(request):
     university_name = request.args.get("university")
     date_str = request.args.get("date")
 
-    # DÜZELTME: event_dates tablosu kalktı. Tarihleri events tablosundan alıyoruz.
     query = """
         SELECT 
             e.event_id AS id,
@@ -282,7 +297,6 @@ async def etkinlikler(request):
         params.append(university_name)
 
     if date_str:
-        # e.start_datetime üzerinden filtreleme
         query += " AND DATE(e.start_datetime) = %s"
         params.append(date_str)
 
@@ -325,6 +339,7 @@ async def etkinlikler(request):
 # -------------------------------------------------
 @app.post("/api/takvim/ekle")
 async def takvime_ekle(request):
+    # İstersen burayı da @authorized() ile koruyabilirsin
     data = request.json or {}
     email = (data.get("email") or "").strip().lower()
     event_id = data.get("event_id")
@@ -346,10 +361,11 @@ async def takvime_ekle(request):
 
 
 # -------------------------------------------------
-# Kullanıcının takvimi (YENİ VERİTABANI YAPISINA GÖRE GÜNCELLENDİ)
+# Kullanıcının takvimi
 # -------------------------------------------------
 @app.get("/api/takvim")
 async def takvim(request):
+    # Burayı da @authorized() ile korumanı öneririm
     email = (request.args.get("email") or "").strip().lower()
 
     if not email:
@@ -359,7 +375,6 @@ async def takvim(request):
     if not user:
         return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
 
-    # DÜZELTME: event_dates tablosu kalktı, JOIN silindi.
     query = """
         SELECT
             e.event_id AS id,
