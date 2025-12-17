@@ -13,6 +13,9 @@ const MainPage = () => {
 
   const navigate = useNavigate();
 
+  // Token'ı en başta oku
+  const token = localStorage.getItem("token");
+
   const ayIsimleri = [
     "OCAK",
     "ŞUB",
@@ -28,37 +31,34 @@ const MainPage = () => {
     "ARA",
   ];
 
-  // --- 1. GÜVENLİK KONTROLÜ (YENİ EKLENDİ) ---
+  // --- KRİTİK EKLENTİ 1: Token Yoksa At ---
   useEffect(() => {
-    const token = localStorage.getItem("token");
     if (!token) {
-      // Token yoksa seni buraya sokmam, giriş yap!
-      navigate("/");
+      // replace: true -> Geçmişten Main sayfasını siler
+      navigate("/", { replace: true });
     }
-  }, [navigate]);
+  }, [navigate, token]);
 
-  // --- 2. ÇIKIŞ YAP (GÜNCELLENDİ: Token Siler) ---
+  // --- KRİTİK EKLENTİ 2: Çıkış Yap ---
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    navigate("/");
+    // Geçmişi temizleyerek çık
+    navigate("/", { replace: true });
   };
 
-  // --- 3. BACKEND'DEN VERİ ÇEKME (GÜNCELLENDİ: Token Header Ekler) ---
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return; // Token yoksa zaten yukarıdaki kod atacak
+    if (!token) return;
 
     fetch("http://127.0.0.1:8000/api/etkinlikler", {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`, // <-- İŞTE BU SATIR ÇOK ÖNEMLİ
+        Authorization: `Bearer ${token}`,
       },
     })
       .then((response) => {
         if (response.status === 401) {
-          // Token süresi dolmuş veya geçersiz
           handleLogout();
           throw new Error("Oturum süresi doldu");
         }
@@ -72,9 +72,8 @@ const MainPage = () => {
         }
       })
       .catch((error) => console.error("API Bağlantı Hatası:", error));
-  }, []);
+  }, [token]);
 
-  // --- RESMİ TATİLLER API (DEĞİŞMEDİ) ---
   useEffect(() => {
     fetch("https://date.nager.at/api/v3/PublicHolidays/2025/TR")
       .then((res) => res.json())
@@ -84,7 +83,6 @@ const MainPage = () => {
 
   const toggleMenu = () => setMenuAcik(!menuAcik);
 
-  // --- TAKVİM İŞARETLEME MANTIĞI (DEĞİŞMEDİ) ---
   const tileContent = ({ date, view }) => {
     if (view === "month") {
       const yil = date.getFullYear();
@@ -114,9 +112,15 @@ const MainPage = () => {
     return null;
   };
 
+  // --- KRİTİK EKLENTİ 3: Render Engelleme ---
+  // Token yoksa sayfayı hiç çizme (null dön).
+  // Bu sayede "Geri" tuşuna basınca anlık olarak bile sayfa görünmez.
+  if (!token) {
+    return null;
+  }
+
   return (
     <>
-      {/* ARKA PLAN VİDEOSU */}
       <div className="video-wrapper">
         <video className="video-background" autoPlay loop muted playsInline>
           <source src="/video.mp4" type="video/mp4" />
@@ -226,7 +230,6 @@ const MainPage = () => {
             )}
           </div>
 
-          {/* TAKVİM BÖLÜMÜ */}
           <div className="calendar-wrapper">
             <Calendar
               onChange={setDate}

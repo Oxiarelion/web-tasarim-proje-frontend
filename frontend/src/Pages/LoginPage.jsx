@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../Styles/LoginPage.css";
 
@@ -10,6 +10,15 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  // --- KRİTİK EKLENTİ 1: Zaten girişliyse Login'i gösterme, Main'e at ---
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      // replace: true -> Geçmişten Login sayfasını siler
+      navigate("/anasayfa", { replace: true });
+    }
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,17 +41,16 @@ const LoginPage = () => {
       if (data.basarili) {
         setMesaj("✅ " + data.mesaj);
 
-        // --- YENİ EKLENDİ: TOKEN VE USER BİLGİSİNİ KAYDET ---
         if (data.token) {
-          localStorage.setItem("token", data.token); // Token'ı kaydet
+          localStorage.setItem("token", data.token);
         }
         if (data.user) {
-          localStorage.setItem("user", JSON.stringify(data.user)); // Kullanıcıyı kaydet
+          localStorage.setItem("user", JSON.stringify(data.user));
         }
 
-        // Yönlendirme
+        // --- KRİTİK EKLENTİ 2: replace: true ile yönlendirme ---
         setTimeout(() => {
-          navigate("/anasayfa");
+          navigate("/anasayfa", { replace: true });
         }, 1000);
       } else {
         setMesaj("❌ " + (data.mesaj || "Şifre veya e-posta hatalı."));
