@@ -2,6 +2,8 @@
 from dotenv import load_dotenv
 import os
 
+#Arkadaşlar ben Barış. Reponuza yorum stırı açtım çünkü backend tarafında jwt tokenı yani acces token bulunmuyor. O önemli bir mesela hoca kontrol edecektir. Protected page yapısı için çok önemli bir mesele.
+
 # Importlardan hemen sonra bu satırı ekle:
 load_dotenv()  # <-- BU KOMUT .env DOSYASINI OKUR
 
