@@ -264,3 +264,5 @@ const MainPage = () => {
 };
 
 export default MainPage;
+
+//KODDDAAAA DEĞİŞİKLİKKKK
