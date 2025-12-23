@@ -335,43 +335,64 @@ async def etkinlikler(request):
 
 
 # -------------------------------------------------
-# Takvime Ekle (FavouriteEvent)
+# 🔥 DÜZELTİLEN KISIM: Takvime Ekle (TOGGLE - EKLE/SİL)
 # -------------------------------------------------
 @app.post("/api/takvim/ekle")
+@authorized() # TOKEN KORUMASI EKLENDİ
 async def takvime_ekle(request):
-    # İstersen burayı da @authorized() ile koruyabilirsin
-    data = request.json or {}
-    email = (data.get("email") or "").strip().lower()
-    event_id = data.get("event_id")
+    try:
+        data = request.json or {}
+        email = (data.get("email") or "").strip().lower()
+        event_id = data.get("event_id")
 
-    if not email or not event_id:
-        return json({"basarili": False, "mesaj": "Email ve event_id gerekli."}, status=400)
+        if not email or not event_id:
+            return json({"basarili": False, "mesaj": "Email ve event_id gerekli."}, status=400)
 
-    user = await User.get_or_none(email=email)
-    if not user:
-        return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
+        user = await User.get_or_none(email=email)
+        if not user:
+            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
 
-    event = await Event.get_or_none(event_id=event_id)
-    if not event:
-        return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
+        event = await Event.get_or_none(event_id=event_id)
+        if not event:
+            return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
 
-    await FavouriteEvent.get_or_create(user=user, event=event)
+        # get_or_create kullanarak:
+        # created = True  => Yeni eklendi.
+        # created = False => Zaten vardı (fav_event nesnesini döndü).
+        fav_event, created = await FavouriteEvent.get_or_create(user=user, event=event)
 
-    return json({"basarili": True, "mesaj": "Etkinlik takvime/favorilere eklendi."}, status=200)
+        if created:
+            # Yeni eklediysek, işlem tamam.
+            print(f"✅ Favorilere Eklendi: {user.email} -> Event {event.event_id}")
+            return json({"basarili": True, "mesaj": "Favorilere eklendi.", "durum": "eklendi"}, status=200)
+        else:
+            # Zaten varsa, SILIYORUZ (Favoriden çıkarıyoruz)
+            await fav_event.delete()
+            print(f"🗑️ Favorilerden Silindi: {user.email} -> Event {event.event_id}")
+            return json({"basarili": True, "mesaj": "Favorilerden çıkarıldı.", "durum": "cikarildi"}, status=200)
+    
+    except Exception as e:
+        # Hata detayını consola ve frontend'e basıyoruz ki 'undefined' olmasın
+        print(f"❌ TAKVİM EKLEME HATASI: {str(e)}")
+        return json({"basarili": False, "mesaj": f"Sunucu hatası: {str(e)}"}, status=500)
 
 
 # -------------------------------------------------
 # Kullanıcının takvimi
 # -------------------------------------------------
 @app.get("/api/takvim")
+@authorized() # GÜVENLİK İÇİN EKLENDİ
 async def takvim(request):
-    # Burayı da @authorized() ile korumanı öneririm
-    email = (request.args.get("email") or "").strip().lower()
-
-    if not email:
-        return json({"basarili": False, "mesaj": "Email gerekli."}, status=400)
-
-    user = await User.get_or_none(email=email)
+    # React'tan artık token ile geliniyor ama email parametresi de gelebilir.
+    # Token'dan user_id'yi zaten alıyoruz ama mevcut yapıyı bozmayalım.
+    
+    # Kullanıcı email bilgisini query params'dan almayı dener, yoksa token'dan çözeriz
+    # Şimdilik senin yapına sadık kalarak request.ctx.user_id üzerinden gidelim:
+    user_id = request.ctx.user_id 
+    
+    # Alternatif: Eğer email parametresi gönderildiyse onu da kullanabiliriz ama user_id daha güvenli.
+    
+    user = await User.get_or_none(user_id=user_id)
     if not user:
         return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
 
@@ -407,7 +428,7 @@ async def takvim(request):
             "time": sd.strftime("%H:%M") if sd else None,
         })
 
-    return json({"basarili": True, "adet": len(user_events), "etkinlikler": user_events})
+    return json({"basarili": True, "adet": len(user_events), "takvim": user_events})
 
 
 # -------------------------------------------------

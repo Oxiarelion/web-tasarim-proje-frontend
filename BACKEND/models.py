@@ -5,7 +5,6 @@ class User(models.Model):
     user_id = fields.IntField(pk=True) 
     email = fields.CharField(max_length=255, unique=True)
     password = fields.CharField(max_length=255)
-    name = fields.CharField(max_length=255, null=True)
     
     role = fields.CharField(max_length=50, default='user') 
     is_active = fields.BooleanField(default=True)
@@ -15,12 +14,9 @@ class User(models.Model):
     class Meta:
         table = "users"
 
-# 2. Kullanıcı Profili (DÜZELTİLDİ: Çakışma Giderildi)
+# 2. Kullanıcı Profili
 class UserProfile(models.Model):
-    # user_id alanını sildik, çünkü aşağıdaki 'user' alanı zaten user_id sütununu yönetiyor.
-    # pk=True diyerek bu bağlantının aynı zamanda tablonun anahtarı olduğunu belirttik.
     user = fields.OneToOneField("models.User", related_name="profile", source_field="user_id", pk=True)
-    
     bio = fields.TextField(null=True)
     profile_photo = fields.CharField(max_length=255, null=True)
     full_name = fields.CharField(max_length=255, null=True)
@@ -28,13 +24,29 @@ class UserProfile(models.Model):
     class Meta:
         table = "user_profiles"
 
-# 3. Etkinlikler Tablosu
+# --- YENİ EKLENDİ: Üniversiteler Tablosu ---
+class University(models.Model):
+    university_id = fields.IntField(pk=True)
+    name = fields.CharField(max_length=255)
+    logo_url = fields.CharField(max_length=255, null=True)
+
+    class Meta:
+        table = "universities"
+
+# 3. Etkinlikler Tablosu (GÜNCELLENDİ)
 class Event(models.Model):
     event_id = fields.IntField(pk=True)
     title = fields.CharField(max_length=255)
     description = fields.TextField(null=True)
     location = fields.CharField(max_length=255, null=True)
     
+    # app.py ile uyumlu olması için eklenenler:
+    start_datetime = fields.DatetimeField(null=True)
+    end_datetime = fields.DatetimeField(null=True)
+    
+    # Üniversite ile ilişki
+    university = fields.ForeignKeyField("models.University", related_name="events", source_field="university_id", null=True)
+
     created_at = fields.DatetimeField(auto_now_add=True)
     is_active = fields.BooleanField(default=True)
     
@@ -43,8 +55,6 @@ class Event(models.Model):
 
 # 4. Favori Etkinlikler
 class FavouriteEvent(models.Model):
-    # Composite Key (Çoklu Anahtar) yerine Tortoise'un otomatik ID atamasına izin veriyoruz.
-    # Veritabanında user_id ve event_id var, onları bağlıyoruz.
     user = fields.ForeignKeyField("models.User", related_name="favorites", source_field="user_id")
     event = fields.ForeignKeyField("models.Event", related_name="favorited_by", source_field="event_id")
     added_at = fields.DatetimeField(auto_now_add=True)
@@ -52,11 +62,18 @@ class FavouriteEvent(models.Model):
     class Meta:
         table = "favourite_events"
 
-# 5. Geri Bildirimler
+# 5. Geri Bildirimler (GÜNCELLENDİ)
 class Feedback(models.Model):
     feedback_id = fields.IntField(pk=True)
     user = fields.ForeignKeyField("models.User", related_name="feedbacks", source_field="user_id")
+    event = fields.ForeignKeyField("models.Event", related_name="event_feedbacks", source_field="event_id", null=True)
+    
+    # app.py'de kullanılan alanlar eklendi
+    type = fields.CharField(max_length=50, null=True) # bug, suggestion vb.
+    title = fields.CharField(max_length=255, null=True)
     message = fields.TextField()
+    status = fields.CharField(max_length=50, default="pending") # pending, resolved
+
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
@@ -66,6 +83,7 @@ class Feedback(models.Model):
 class ContactUserTypes(models.Model):
     id = fields.IntField(pk=True)
     label = fields.CharField(max_length=100)
+    is_active = fields.BooleanField(default=True) # app.py kullanıyor
 
     class Meta:
         table = "contact_user_types"
@@ -74,6 +92,7 @@ class ContactUserTypes(models.Model):
 class ContactTopicTypes(models.Model):
     id = fields.IntField(pk=True)
     label = fields.CharField(max_length=100)
+    is_active = fields.BooleanField(default=True) # app.py kullanıyor
 
     class Meta:
         table = "contact_topic_types"
@@ -83,10 +102,13 @@ class ContactMessages(models.Model):
     contact_id = fields.IntField(pk=True)
     full_name = fields.CharField(max_length=255)
     email = fields.CharField(max_length=255)
+    university = fields.CharField(max_length=255, null=True) # app.py kullanıyor
     message = fields.TextField()
+    consent = fields.BooleanField(default=False) # Rıza metni onayı
     
     user_type = fields.ForeignKeyField("models.ContactUserTypes", null=True, source_field="user_type_id")
     topic_type = fields.ForeignKeyField("models.ContactTopicTypes", null=True, source_field="topic_type_id")
+    
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:

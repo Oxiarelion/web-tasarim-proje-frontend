@@ -1,93 +1,107 @@
-/* --- GENEL SAYFA --- */
+/* --- GENEL AYARLAR --- */
 body,
 html {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
+  font-family: "Segoe UI", sans-serif;
 }
 
-.main-container {
-  width: 100%;
-  min-height: 100vh;
-  position: relative;
-  /* background-image kaldırıldı */
-  color: white;
+/* Scrollbar Tasarımı */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+::-webkit-scrollbar-thumb {
+  background: #fbbf24;
+  border-radius: 4px;
 }
 
-/* --- FULL SCREEN VIDEO ARKA PLANI --- */
-.video-background {
-  position: fixed; /* Ekrana sabitle */
-  top: 0;
-  left: 0;
-  width: 100vw; /* Ekran genişliği */
-  height: 100vh; /* Ekran yüksekliği */
-  object-fit: cover; /* Ekrana yay */
-  z-index: -10; /* En arkaya at */
-}
-
-/* VİDEO KARARTMA KATMANI */
-.video-overlay {
-  position: fixed; /* Ekrana sabitle */
+/* --- VİDEO ARKA PLAN --- */
+/* --- AURORA ARKA PLAN --- */
+.aurora-bg-wrapper {
+  position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.6); /* %60 koyuluk */
-  z-index: -5; /* Videonun önünde, içeriğin arkasında */
+  z-index: -10;
+  background-color: #4800bd; /* Aurora yüklenene kadar veya alt zemin siyah olsun */
 }
 
-/* --- NAVBAR --- */
-.navbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 40px;
+.video-background {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-overlay {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  z-index: 20;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6); /* %60 Karartma */
+  z-index: -5;
+}
+
+/* --- NAVBAR (SABİT) --- */
+.navbar-fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 80px;
+  background: rgba(20, 20, 20, 0.9); /* Koyu şeffaf arka plan */
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 30px;
   box-sizing: border-box;
+  z-index: 1000;
 }
 
 .hamburger-icon {
   font-size: 30px;
   cursor: pointer;
-  flex: 1;
-  text-align: left;
   color: white;
 }
 
-.logo-container {
-  flex: 1;
-  text-align: center;
+.logo-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .logo-text {
   font-family: "Times New Roman", serif;
-  font-size: 2.5rem;
+  font-size: 2.2rem;
   font-weight: bold;
   margin: 0;
+  color: white;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
   white-space: nowrap;
 }
 
 .navbar-right-placeholder {
-  flex: 1;
+  width: 30px; /* Hamburger ikonu kadar boşluk bırakır */
 }
 
-/* --- SIDEBAR --- */
+/* --- SIDEBAR (YAN MENÜ) --- */
 .sidebar {
   position: fixed;
   top: 0;
   left: -300px;
   width: 250px;
   height: 100%;
-  background-color: #c56900;
-  color: #9c0000;
+  background-color: #c56900; /* Mevcut tasarım rengi */
   transition: left 0.3s ease-in-out;
-  z-index: 1000;
+  z-index: 1001;
   padding-top: 60px;
   box-shadow: 5px 0 15px rgba(0, 0, 0, 0.5);
 }
@@ -100,14 +114,17 @@ html {
   list-style: none;
   padding: 0;
 }
+
 .sidebar-links li a {
   display: block;
   padding: 15px 25px;
   color: #333;
   text-decoration: none;
   font-size: 18px;
-  border-bottom: 1px solid #ddd;
+  font-weight: bold;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
 }
+
 .close-btn {
   position: absolute;
   top: 15px;
@@ -118,6 +135,7 @@ html {
   cursor: pointer;
   color: #333;
 }
+
 .overlay {
   position: fixed;
   top: 0;
@@ -125,74 +143,218 @@ html {
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 999;
+  z-index: 1000;
 }
 
-/* --- HERO SECTION --- */
-.hero-section {
+/* --- ANA DÜZEN (GRID LAYOUT) --- */
+.main-layout {
+  margin-top: 120px; /* Navbar'ın altında kalmaması için */
+  padding: 0 5% 50px 5%;
+  display: grid;
+  grid-template-columns: 3fr 1fr; /* SOL (Etkinlik): 3 birim, SAĞ (Takvim): 1 birim */
+  gap: 40px;
+  align-items: start;
   position: relative;
-  z-index: 1;
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  padding-top: 200px;
-}
-
-/* İÇERİK KUTUSU */
-.content-box {
-  text-align: center;
-  width: 80%;
-  max-width: 1000px;
-}
-.content-box h2 {
-  font-size: 3.5rem;
-  margin-bottom: 10px;
-  text-shadow: 2px 2px 5px rgb(177, 90, 8);
-  font-family: "Times New Roman", serif;
-}
-
-/* --- TAKVİM KUTUSU --- */
-.calendar-wrapper {
-  position: absolute;
-  top: 100px;
-  right: 50px;
-  width: 320px;
   z-index: 10;
 }
 
-/* --- TAKVİM STİLLERİ --- */
+/* --- BAŞLIK ve FİLTRE ALANI --- */
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 20px 30px;
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.page-title {
+  margin: 0;
+  font-size: 2.5rem;
+  font-family: "Times New Roman", serif;
+  color: white;
+  text-shadow: 2px 2px 5px rgb(177, 90, 8);
+}
+
+.uni-select {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid #fbbf24;
+  background-color: #111;
+  color: #fbbf24;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  outline: none;
+}
+
+/* --- ETKİNLİK IZGARASI --- */
+.events-grid {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(280px, 1fr)
+  ); /* Responsive Kutular */
+  gap: 25px;
+  width: 100%;
+}
+
+/* --- ETKİNLİK KUTUSU (CARD) --- */
+.etkinlik-kutu {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  min-height: 220px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.etkinlik-kutu:hover {
+  transform: translateY(-5px);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 15px 30px #013501fa;
+  border-color: #013501fa;
+}
+
+/* Kart Header (Tarih + Başlık) */
+.kutu-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.kutu-tarih {
+  background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  color: #1a1a1a;
+  padding: 10px;
+  border-radius: 12px;
+  text-align: center;
+  min-width: 60px;
+  box-shadow: 0 4px 10px rgba(251, 191, 36, 0.3);
+}
+
+.kutu-gun {
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1;
+  display: block;
+}
+
+.kutu-ay {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  display: block;
+}
+
+.kutu-baslik {
+  font-size: 1.2rem;
+  color: white;
+  margin: 0;
+  font-family: "Segoe UI", sans-serif;
+  line-height: 1.3;
+}
+
+.kutu-uni {
+  font-size: 0.8rem;
+  color: #fbbf24;
+  font-weight: bold;
+  margin-top: 5px;
+  display: block;
+}
+
+.kutu-desc {
+  font-size: 0.95rem;
+  color: #ccc;
+  line-height: 1.4;
+  margin-bottom: 15px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kutu-footer {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #fbbf24;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 10px;
+  font-weight: 500;
+}
+
+/* --- SAĞ TARAF (STICKY SIDEBAR) --- */
+.sticky-sidebar {
+  position: sticky;
+  top: 100px; /* Navbar'dan 20px aşağıda durur */
+}
+
+.calendar-legend {
+  margin-top: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 15px;
+  border-radius: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* --- TAKVİM ÖZELLEŞTİRME --- */
 .react-calendar {
-  background: rgba(0, 0, 0, 0.6) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  border-radius: 15px !important;
-  color: white !important;
-  font-family: sans-serif !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
   width: 100% !important;
+  border: none !important;
+  background: rgba(0, 0, 0, 0.6) !important;
+  border-radius: 16px !important;
+  font-family: "Segoe UI", sans-serif !important;
+  padding: 15px !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
 }
 
 .react-calendar__navigation button {
   color: white !important;
-  min-width: 44px;
-  background: none;
-  font-size: 16px;
+  font-size: 1.2rem !important;
+  font-weight: bold !important;
 }
-.react-calendar__navigation button:enabled:hover,
-.react-calendar__navigation button:enabled:focus {
+.react-calendar__navigation button:enabled:hover {
   background-color: rgba(255, 255, 255, 0.1) !important;
   border-radius: 8px;
 }
 
-.react-calendar__month-view__days__day {
-  color: white !important;
-}
-.react-calendar__month-view__days__day--weekend {
+.react-calendar__month-view__weekdays__weekday {
   color: #ddd !important;
-}
-.react-calendar__month-view__days__day--neighboringMonth {
-  color: rgba(255, 255, 255, 0.3) !important;
+  text-decoration: none !important;
+  font-weight: bold;
+  font-size: 0.9rem;
 }
 
+abbr[title] {
+  text-decoration: none !important;
+}
+
+.react-calendar__tile {
+  color: #fff !important;
+  font-size: 1rem !important;
+  padding: 12px 0 !important;
+  border-radius: 8px !important;
+}
+
+.react-calendar__tile:enabled:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Bugünün Tarihi */
 .react-calendar__tile--now {
   background: transparent !important;
 }
@@ -200,154 +362,101 @@ html {
   background: #fbbf24;
   color: black;
   border-radius: 50%;
-  padding: 6px;
-  width: 25px;
-  height: 25px;
-  display: inline-flex;
-  justify-content: center;
+  width: 28px;
+  height: 28px;
+  display: flex;
   align-items: center;
+  justify-content: center;
+  margin: 0 auto;
 }
 
-.react-calendar__tile:enabled:hover,
-.react-calendar__tile:enabled:focus {
-  background-color: rgba(255, 255, 255, 0.2) !important;
-  border-radius: 10px;
-}
+/* Seçili Tarih */
 .react-calendar__tile--active {
   background: rgba(255, 255, 255, 0.4) !important;
-  border-radius: 10px;
   color: white !important;
 }
 
-.tatil-noktasi {
-  height: 5px;
-  width: 5px;
-  background-color: #ff6b6b;
-  border-radius: 50%;
-  margin: 3px auto 0;
-}
-
-/* --- ETKİNLİK KARTLARI --- */
-.etkinlik-container {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 20px;
-  margin-top: 20px;
-  max-height: 550px;
-  overflow-y: auto;
-  padding: 10px;
-  justify-content: center;
-}
-
-.etkinlik-container::-webkit-scrollbar {
-  width: 8px;
-}
-.etkinlik-container::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-}
-
-.etkinlik-kart {
-  flex: 1 1 400px;
-  max-width: 48%;
-  display: flex;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 15px;
-  padding: 20px;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-  text-align: left;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-}
-
-.etkinlik-kart:hover {
-  transform: translateY(-5px);
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.etkinlik-tarih {
-  background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
-  min-width: 70px;
-  height: 70px;
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  margin-right: 20px;
-  color: #1a1a1a;
-  font-weight: bold;
-  box-shadow: 0 4px 10px rgba(251, 191, 36, 0.3);
-}
-
-.etkinlik-tarih span {
-  font-size: 1.8rem;
-  line-height: 1;
-}
-
-.etkinlik-tarih small {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  opacity: 0.8;
-}
-
-.etkinlik-detay {
-  flex: 1;
-}
-
-.etkinlik-detay h3 {
-  margin: 0 0 5px 0;
-  font-size: 1.3rem;
-  color: white;
-  font-family: "Segoe UI", sans-serif;
-}
-
-.etkinlik-detay .aciklama {
-  font-size: 0.95rem;
-  color: #ccc;
-  margin-bottom: 8px;
-  display: -webkit-box;
-
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.etkinlik-detay .konum {
-  font-size: 0.85rem;
-  color: #fbbf24;
-  font-weight: 500;
-  margin: 0;
-}
-/* --- TAKVİM NOKTA STİLLERİ --- */
-
-/* Noktaları yan yana veya alt alta dizmek için kapsayıcı */
+/* --- NOKTALAR --- */
 .takvim-nokta-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 3px; /* Noktalar arası boşluk */
-  margin-top: 3px;
-  height: 6px; /* Yükseklik sabitleme (kaymayı önler) */
+  gap: 3px;
+  margin-top: 4px;
+  height: 6px;
 }
 
-/* 1. Resmi Tatil Noktası (Kırmızı) */
 .tatil-noktasi {
   height: 6px;
   width: 6px;
-  background-color: #ff6b6b; /* Kırmızı */
+  background-color: #0d60beff;
   border-radius: 50%;
 }
 
-/* 2. Etkinlik Noktası (Sarı/Altın) */
 .etkinlik-noktasi {
   height: 6px;
   width: 6px;
-  background-color: #fbbf24; /* Etkinlik kartlarıyla uyumlu Sarı */
+  background-color: #fbbf24;
   border-radius: 50%;
-  box-shadow: 0 0 4px rgba(251, 191, 36, 0.6); /* Hafif parlasın */
+  box-shadow: 0 0 4px rgba(251, 191, 36, 0.6);
+}
+
+/* Takvimdeki Yeşil Nokta (Favori) */
+.favori-noktasi {
+  height: 7px;
+  width: 7px;
+  background-color: #ce1a03ff; /* Neon Yeşil */
+  border-radius: 50%;
+  box-shadow: 0 0 6px #5f0606; /* Parlama efekti */
+}
+
+/* --- BOŞ DURUM --- */
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 40px;
+  border-radius: 16px;
+  color: #fff;
+}
+
+.clear-filter-btn {
+  margin-top: 15px;
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: none;
+  background: #fbbf24;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* --- YENİ EKLENEN STİLLER (Favoriler İçin) --- */
+
+/* Kalp Butonu Stili */
+.fav-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  margin-left: 10px;
+  /* Butonun şekli bozulmasın */
+  flex-shrink: 0;
+}
+
+.fav-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+.fav-btn.active {
+  background: rgba(220, 38, 38, 0.2); /* Kırmızımsı arka plan */
+  border-color: rgba(220, 38, 38, 0.5);
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.4);
 }
