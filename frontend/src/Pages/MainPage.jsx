@@ -58,6 +58,11 @@ const MainPage = () => {
     navigate("/", { replace: true });
   };
 
+  // --- YENİ: Profil Sayfasına Gitme Fonksiyonu ---
+  const handleProfileClick = () => {
+    navigate("/profil"); // React Router ile profil sayfasına yönlendir
+  };
+
   // --- 2. Tüm Etkinlikleri Çekme ---
   useEffect(() => {
     if (!token) return;
@@ -102,12 +107,10 @@ const MainPage = () => {
     })
       .then((res) => res.json())
       .then((data) => {
-        // Backend yapısına göre veri kontrolü
         if (data.basarili && Array.isArray(data.takvim)) {
           const favIds = data.takvim.map((item) => item.id);
           setFavoriler(favIds);
         } else if (Array.isArray(data)) {
-          // Bazı backendler direkt liste döner
           const favIds = data.map((item) => item.id);
           setFavoriler(favIds);
         }
@@ -123,11 +126,10 @@ const MainPage = () => {
       .catch((err) => console.error("Tatil API Hatası:", err));
   }, []);
 
-  // --- YENİ: Favori Ekleme / Çıkarma İşlemi (GÜÇLENDİRİLMİŞ VERSİYON) ---
+  // --- 5. Favori Ekleme / Çıkarma ---
   const toggleFavori = async (etkinlik) => {
     if (!token) return;
 
-    // 1. LocalStorage'dan kullanıcı e-postasını güvenli şekilde al
     const userStr = localStorage.getItem("user");
     let userEmail = null;
 
@@ -162,30 +164,21 @@ const MainPage = () => {
         }),
       });
 
-      // Cevabı al ve konsola yazdır (Hata ayıklama için)
       const result = await response.json();
       console.log("Backend Cevabı:", result);
 
       if (response.ok && (result.basarili || result.success)) {
-        // Başarılıysa State'i güncelle
         if (isFavori) {
           setFavoriler((prev) => prev.filter((id) => id !== etkinlik.id));
         } else {
           setFavoriler((prev) => [...prev, etkinlik.id]);
         }
       } else {
-        // Hata mesajını yakalamaya çalış
-        const hataMesaji =
-          result.mesaj ||
-          result.message ||
-          result.error ||
-          result.detail ||
-          JSON.stringify(result);
-        alert("İşlem başarısız: " + hataMesaji);
+        alert("İşlem başarısız: " + (result.mesaj || "Bilinmeyen hata"));
       }
     } catch (error) {
       console.error("Favori işlemi hatası:", error);
-      alert("Sunucuya bağlanırken hata oluştu. Konsolu kontrol edin.");
+      alert("Sunucuya bağlanırken hata oluştu.");
     }
   };
 
@@ -215,8 +208,6 @@ const MainPage = () => {
               title={`Tatil: ${tatilVarMi.localName}`}
             ></div>
           )}
-
-          {/* Eğer favori varsa YEŞİL nokta, yoksa ama etkinlik varsa SARI nokta */}
           {favoriVarMi ? (
             <div className="favori-noktasi" title="Takvimime Ekli"></div>
           ) : (
@@ -236,7 +227,7 @@ const MainPage = () => {
     <>
       <div className="aurora-bg-wrapper">
         <Aurora
-          colorStops={["#001135", "#e592f0", "#1bb9be"]}
+          colorStops={["#D8D8F6", "#4F7C82", "#B8E3E9"]}
           blend={0.5}
           amplitude={1.0}
           speed={0.5}
@@ -244,6 +235,7 @@ const MainPage = () => {
       </div>
 
       <div className="main-container">
+        {/* --- NAVBAR --- */}
         <nav className="navbar-fixed">
           <div className="hamburger-icon" onClick={toggleMenu}>
             &#9776;
@@ -254,22 +246,33 @@ const MainPage = () => {
           <div className="navbar-right-placeholder"></div>
         </nav>
 
+        {/* --- SIDEBAR (Menü) --- */}
         <div className={`sidebar ${menuAcik ? "open" : ""}`}>
           <button className="close-btn" onClick={toggleMenu}>
             &times;
           </button>
           <ul className="sidebar-links">
+            {/* Profil Linki - Düzeltildi */}
             <li>
-              <a href="#profil">Profil</a>
+              <a onClick={handleProfileClick} style={{ cursor: "pointer" }}>
+                Profil
+              </a>
+            </li>
+
+            <li>
+              <a href="#universite" onClick={toggleMenu}>
+                Üniversite
+              </a>
             </li>
             <li>
-              <a href="#universite">Üniversite</a>
+              <a href="#etkinlikler" onClick={toggleMenu}>
+                Etkinlikler
+              </a>
             </li>
             <li>
-              <a href="#etkinlikler">Etkinlikler</a>
-            </li>
-            <li>
-              <a href="#iletisim">İletişim</a>
+              <a href="#iletisim" onClick={toggleMenu}>
+                İletişim
+              </a>
             </li>
             <li>
               <a
@@ -281,15 +284,19 @@ const MainPage = () => {
             </li>
           </ul>
         </div>
+
+        {/* Overlay (Menü açılınca arka planı karartır) */}
         {menuAcik && <div className="overlay" onClick={toggleMenu}></div>}
 
         <div className="main-layout">
-          {/* --- SOL KOLON --- */}
+          {/* --- SOL KOLON (Filtreler ve Liste) --- */}
           <div
             style={{ display: "flex", flexDirection: "column", gap: "25px" }}
           >
-            <div className="filter-header">
-              <h2 className="page-title">Güncel Etkinlikler</h2>
+            <div className="filter-header" id="universite">
+              <h2 className="page-title" id="etkinlikler">
+                Güncel Etkinlikler
+              </h2>
               <select
                 value={secilenUni}
                 onChange={(e) => setSecilenUni(e.target.value)}
@@ -336,7 +343,7 @@ const MainPage = () => {
                           )}
                         </div>
 
-                        {/* --- Favori Butonu (Kalp) --- */}
+                        {/* Favori Butonu */}
                         <button
                           className={`fav-btn ${isFav ? "active" : ""}`}
                           onClick={() => toggleFavori(etkinlik)}
@@ -379,7 +386,7 @@ const MainPage = () => {
             </div>
           </div>
 
-          {/* --- SAĞ KOLON (TAKVİM) --- */}
+          {/* --- SAĞ KOLON (Takvim) --- */}
           <div className="sticky-sidebar">
             <Calendar
               onChange={setDate}

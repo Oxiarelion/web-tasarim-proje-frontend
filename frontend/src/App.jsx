@@ -1,8 +1,8 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import LoginPage from "./Pages/LoginPage"; // İsim değişti
-import MainPage from "./Pages/MainPage"; // İsim değişti
-
+import LoginPage from "./Pages/LoginPage";
+import MainPage from "./Pages/MainPage";
+import UserProfile from "./Pages/UserProfile";
 function App() {
   return (
     <Router>
@@ -12,6 +12,7 @@ function App() {
 
         {/* Giriş başarılı olunca buraya yönlendireceğiz */}
         <Route path="/anasayfa" element={<MainPage />} />
+        <Route path="/profil" element={<UserProfile />} />
       </Routes>
     </Router>
   );

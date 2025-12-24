@@ -1,18 +1,17 @@
-# app.py
 from dotenv import load_dotenv
 import os
 
-# Importlardan hemen sonra bu satırı ekle:
-load_dotenv()  # <-- BU KOMUT .env DOSYASINI OKUR
+# 1. .env DOSYASINI YÜKLE
+load_dotenv()
 
 from sanic import Sanic
 from sanic.response import json, text
 from sanic_cors import CORS
 import secrets, smtplib, asyncio
-import jwt  # <-- YENİ EKLENDİ: JWT Kütüphanesi
+import jwt
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from functools import partial, wraps  # <-- YENİ EKLENDİ: wraps
+from functools import partial, wraps
 from tortoise import Tortoise, connections
 from models import (
     User, UserProfile, Event, FavouriteEvent, Feedback,
@@ -22,22 +21,19 @@ from models import (
 app = Sanic("Campushub06")
 CORS(app)
 
-# --- YENİ EKLENDİ: GİZLİ ANAHTAR ---
-# Tokenları imzalamak için kullanılır. Prodüksiyonda .env dosyasından çekilmelidir.
+# --- GİZLİ ANAHTAR ---
 SECRET_KEY = os.getenv("SECRET_KEY", "bu_cok_gizli_ve_uzun_bir_sifredir_kimse_bilmemeli_12345")
 
 # -------------------------------------------------
-# YENİ EKLENDİ: TOKEN KONTROL DECORATOR'I (Middleware)
+# TOKEN KONTROL (Middleware)
 # -------------------------------------------------
 def authorized():
     def decorator(f):
         @wraps(f)
         async def decorated_function(request, *args, **kwargs):
-            # 1. Header'dan Token'ı al
             token = None
             if "Authorization" in request.headers:
                 try:
-                    # Gelen format: "Bearer <token>"
                     token = request.headers["Authorization"].split(" ")[1]
                 except IndexError:
                     return json({"basarili": False, "mesaj": "Token formatı hatalı."}, status=401)
@@ -46,9 +42,7 @@ def authorized():
                 return json({"basarili": False, "mesaj": "Token bulunamadı. Giriş yapmalısınız."}, status=401)
 
             try:
-                # 2. Token'ı çöz ve doğrula
                 payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-                # Kullanıcı ID'sini request içine ekle (ileride lazım olursa request.ctx.user_id ile alabilirsin)
                 request.ctx.user_id = payload["user_id"]
             except jwt.ExpiredSignatureError:
                 return json({"basarili": False, "mesaj": "Oturum süresi doldu. Tekrar giriş yapın."}, status=401)
@@ -60,11 +54,12 @@ def authorized():
     return decorator
 
 # -------------------------------------------------
-# ORM init/close
+# ORM BAĞLANTISI (.env DOSYASINDAN OKUR)
 # -------------------------------------------------
 @app.listener("before_server_start")
 async def init_orm(app, loop):
     print(f"🌍 Bağlanılan Veritabanı Hostu: {os.getenv('DB_HOST')}")
+    
     db_url = (
         f"mysql://{os.getenv('DB_USER','root')}:"
         f"{os.getenv('DB_PASS','')}"
@@ -72,14 +67,14 @@ async def init_orm(app, loop):
         f"{int(os.getenv('DB_PORT',3306))}/"
         f"{os.getenv('DB_NAME','event_management_system')}"
     )
+    
     await Tortoise.init(
         db_url=db_url,
         modules={"models": ["models"]},
         timezone="UTC",
         use_tz=True,
     )
-    # Şema değişikliği yaptığımız için generate_schemas bazen hata verebilir, 
-    # gerekirse burayı yorum satırı yapabilirsin.
+    # AWS'de tabloları bozmamak için hata yakalamalı generate
     try:
         await Tortoise.generate_schemas()
     except:
@@ -110,7 +105,7 @@ def send_email_sync(email, reset_link):
 
 
 # -------------------------------------------------
-# SSS Verileri (memory)
+# SSS Verileri
 # -------------------------------------------------
 FAQ_ITEMS = [
     { "id": 1, "question": "CampusHub Ankara nedir?", "answer": "CampusHub Ankara, Ankara’daki üniversitelerde gerçekleşen etkinlikleri tek bir platformda toplayan öğrenci odaklı bir etkinlik keşif uygulamasıdır." },
@@ -155,13 +150,22 @@ async def kayit_ol(request):
         return json({"basarili": False, "mesaj": "Bu e-posta zaten kayıtlı."}, status=409)
 
     user = await User.create(email=email, password=password)
-    await UserProfile.create(user=user, full_name=full_name)
+    # Boş profil oluştur (Hata almamak için önemli)
+    await UserProfile.create(
+        user=user, 
+        full_name=full_name,
+        bio="",
+        department="",
+        grade="",
+        phone_number="",
+        profile_photo=""
+    )
 
     return json({"basarili": True, "mesaj": "Hesabınız başarıyla oluşturuldu!"}, status=201)
 
 
 # -------------------------------------------------
-# Giriş (GÜNCELLENDİ: ARTIK TOKEN VERİYOR)
+# Giriş
 # -------------------------------------------------
 @app.post("/api/giris")
 async def giris(request):
@@ -179,8 +183,7 @@ async def giris(request):
     if user.password != password:
         return json({"basarili": False, "mesaj": "Şifre yanlış."}, status=401)
 
-    # --- YENİ EKLENDİ: TOKEN OLUŞTURMA ---
-    # Token 24 saat geçerli olsun
+    # Token oluşturma
     expiration_time = datetime.now(timezone.utc) + timedelta(hours=24)
     token_payload = {
         "user_id": user.user_id,
@@ -188,17 +191,16 @@ async def giris(request):
         "exp": expiration_time
     }
     
-    # Token'ı şifrele
     token = jwt.encode(token_payload, SECRET_KEY, algorithm="HS256")
 
     user.last_login = datetime.now()
-    # await user.save(update_fields=["last_login"])
+    await user.save(update_fields=["last_login"])
 
     return json({
         "basarili": True, 
         "mesaj": "Hoş geldin!",
-        "token": token,  # <-- Token'ı frontend'e gönderiyoruz
-        "user": {"email": user.email, "role": user.role} # İsteğe bağlı kullanıcı bilgisi
+        "token": token,
+        "user": {"email": user.email, "role": user.role}
     }, status=200)
 
 
@@ -266,14 +268,11 @@ async def sifre_sifirla(request):
 
 
 # -------------------------------------------------
-# Etkinlikler (GÜNCELLENDİ: ARTIK KORUMALI)
+# Etkinlikler
 # -------------------------------------------------
 @app.get("/api/etkinlikler")
-@authorized()  # <-- YENİ EKLENDİ: SADECE TOKEN İLE GİRİLİR
+@authorized()
 async def etkinlikler(request):
-    print("--------------------------------------------------")
-    print("📡 REACT'TAN İSTEK GELDİ: /api/etkinlikler")
-    
     university_name = request.args.get("university")
     date_str = request.args.get("date")
 
@@ -300,22 +299,15 @@ async def etkinlikler(request):
         query += " AND DATE(e.start_datetime) = %s"
         params.append(date_str)
 
-    query += """
-        ORDER BY e.start_datetime ASC
-    """
+    query += " ORDER BY e.start_datetime ASC"
 
     try:
         conn = connections.get("default")
-        print(f"🔍 ÇALIŞTIRILAN SQL:\n{query}")
-        
         rows = await conn.execute_query_dict(query, params)
-        
-        print(f"✅ VERİTABANINDAN DÖNEN KAYIT SAYISI: {len(rows)}")
         
         etkinlikler_list = []
         for r in rows:
             sd = r["start_datetime"]
-            print(f"   -> Bulunan Etkinlik: {r['title']} ({r['university']})")
             etkinlikler_list.append({
                 "id": r["id"],
                 "title": r["title"],
@@ -326,7 +318,6 @@ async def etkinlikler(request):
                 "time": sd.strftime("%H:%M") if sd else None,
             })
 
-        print("--------------------------------------------------")
         return json({"basarili": True, "adet": len(etkinlikler_list), "etkinlikler": etkinlikler_list})
         
     except Exception as e:
@@ -335,10 +326,10 @@ async def etkinlikler(request):
 
 
 # -------------------------------------------------
-# 🔥 DÜZELTİLEN KISIM: Takvime Ekle (TOGGLE - EKLE/SİL)
+# 🔥 DÜZELTİLEN KISIM: Takvime Ekle (ÇOKLU SİLME)
 # -------------------------------------------------
 @app.post("/api/takvim/ekle")
-@authorized() # TOKEN KORUMASI EKLENDİ
+@authorized()
 async def takvime_ekle(request):
     try:
         data = request.json or {}
@@ -356,23 +347,21 @@ async def takvime_ekle(request):
         if not event:
             return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
 
-        # get_or_create kullanarak:
-        # created = True  => Yeni eklendi.
-        # created = False => Zaten vardı (fav_event nesnesini döndü).
-        fav_event, created = await FavouriteEvent.get_or_create(user=user, event=event)
+        # ÖNCE KONTROL EDİYORUZ: Bu kullanıcı bu etkinliği eklemiş mi?
+        existing_favs = await FavouriteEvent.filter(user=user, event=event).all()
 
-        if created:
-            # Yeni eklediysek, işlem tamam.
-            print(f"✅ Favorilere Eklendi: {user.email} -> Event {event.event_id}")
-            return json({"basarili": True, "mesaj": "Favorilere eklendi.", "durum": "eklendi"}, status=200)
-        else:
-            # Zaten varsa, SILIYORUZ (Favoriden çıkarıyoruz)
-            await fav_event.delete()
+        if existing_favs:
+            # Eğer varsa (1 tane veya 10 tane fark etmez), HEPSİNİ SİLİYORUZ.
+            await FavouriteEvent.filter(user=user, event=event).delete()
             print(f"🗑️ Favorilerden Silindi: {user.email} -> Event {event.event_id}")
             return json({"basarili": True, "mesaj": "Favorilerden çıkarıldı.", "durum": "cikarildi"}, status=200)
+        else:
+            # Yoksa yeni bir tane oluşturuyoruz.
+            await FavouriteEvent.create(user=user, event=event)
+            print(f"✅ Favorilere Eklendi: {user.email} -> Event {event.event_id}")
+            return json({"basarili": True, "mesaj": "Favorilere eklendi.", "durum": "eklendi"}, status=200)
     
     except Exception as e:
-        # Hata detayını consola ve frontend'e basıyoruz ki 'undefined' olmasın
         print(f"❌ TAKVİM EKLEME HATASI: {str(e)}")
         return json({"basarili": False, "mesaj": f"Sunucu hatası: {str(e)}"}, status=500)
 
@@ -381,16 +370,9 @@ async def takvime_ekle(request):
 # Kullanıcının takvimi
 # -------------------------------------------------
 @app.get("/api/takvim")
-@authorized() # GÜVENLİK İÇİN EKLENDİ
+@authorized()
 async def takvim(request):
-    # React'tan artık token ile geliniyor ama email parametresi de gelebilir.
-    # Token'dan user_id'yi zaten alıyoruz ama mevcut yapıyı bozmayalım.
-    
-    # Kullanıcı email bilgisini query params'dan almayı dener, yoksa token'dan çözeriz
-    # Şimdilik senin yapına sadık kalarak request.ctx.user_id üzerinden gidelim:
     user_id = request.ctx.user_id 
-    
-    # Alternatif: Eğer email parametresi gönderildiyse onu da kullanabiliriz ama user_id daha güvenli.
     
     user = await User.get_or_none(user_id=user_id)
     if not user:
@@ -648,7 +630,94 @@ async def list_messages(request):
 
 
 # -------------------------------------------------
+# 👤 PROFİL İŞLEMLERİ
+# -------------------------------------------------
+
+# 1. Profil Bilgilerini Getir
+@app.get("/api/profile")
+@authorized()
+async def get_profile(request):
+    try:
+        user_id = request.ctx.user_id
+        
+        # Kullanıcıyı ve profilini çek
+        user = await User.get_or_none(user_id=user_id).prefetch_related("profile")
+        
+        if not user:
+            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
+
+        # Profil tablosu (UserProfile) henüz oluşmamışsa (eski kullanıcılar için) boş oluştur
+        if not user.profile:
+            await UserProfile.create(user=user, full_name="", bio="", profile_photo="")
+            user = await User.get_or_none(user_id=user_id).prefetch_related("profile")
+
+        return json({
+            "basarili": True,
+            "profile": {
+                "email": user.email,
+                "full_name": user.profile.full_name or "",
+                "bio": user.profile.bio or "",
+                "profile_photo": user.profile.profile_photo or "",
+                "role": user.role,
+                "department": user.profile.department or "", 
+                "grade": user.profile.grade or "",
+                "phone_number": user.profile.phone_number or ""
+            }
+        })
+    except Exception as e:
+        print(f"Profil Getirme Hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# 2. Profil Bilgilerini Güncelle
+@app.put("/api/profile")
+@authorized()
+async def update_profile(request):
+    try:
+        user_id = request.ctx.user_id
+        data = request.json or {}
+
+        user = await User.get_or_none(user_id=user_id).prefetch_related("profile")
+        if not user:
+            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
+
+        # Verileri al
+        new_name = data.get("full_name")
+        new_bio = data.get("bio")
+        new_dept = data.get("department")
+        new_grade = data.get("grade")
+        new_phone = data.get("phone_number")
+        new_photo = data.get("profile_photo") # Base64 string veya URL gelebilir
+
+        # Profil yoksa oluştur, varsa güncelle
+        if user.profile:
+            if new_name is not None: user.profile.full_name = new_name
+            if new_bio is not None: user.profile.bio = new_bio
+            if new_dept is not None: user.profile.department = new_dept
+            if new_grade is not None: user.profile.grade = new_grade
+            if new_phone is not None: user.profile.phone_number = new_phone
+            if new_photo is not None: user.profile.profile_photo = new_photo
+            
+            await user.profile.save()
+        else:
+            await UserProfile.create(
+                user=user,
+                full_name=new_name or "",
+                bio=new_bio or "",
+                department=new_dept or "",
+                grade=new_grade or "",
+                phone_number=new_phone or "",
+                profile_photo=new_photo or ""
+            )
+
+        return json({"basarili": True, "mesaj": "Profil başarıyla güncellendi."})
+
+    except Exception as e:
+        print(f"Profil Güncelleme Hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+# -------------------------------------------------
 # Çalıştır
 # -------------------------------------------------
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8000, debug=True)
+    app.run(host="127.0.0.1", port=8000)

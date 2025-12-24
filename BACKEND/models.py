@@ -14,17 +14,24 @@ class User(models.Model):
     class Meta:
         table = "users"
 
-# 2. Kullanıcı Profili
+# 2. Kullanıcı Profili (GÜNCELLENDİ: EKSİK ALANLAR EKLENDİ)
 class UserProfile(models.Model):
     user = fields.OneToOneField("models.User", related_name="profile", source_field="user_id", pk=True)
     bio = fields.TextField(null=True)
     profile_photo = fields.CharField(max_length=255, null=True)
     full_name = fields.CharField(max_length=255, null=True)
     
+    # --- YENİ EKLENEN ALANLAR ---
+    department = fields.CharField(max_length=255, null=True)
+    grade = fields.CharField(max_length=50, null=True)
+    phone_number = fields.CharField(max_length=255, null=True)
+    
     class Meta:
-        table = "user_profiles"
+        # DİKKAT: Veritabanında tablonun adı "userprofile" ise burayı "userprofile" yapman gerekebilir.
+        # Senin attığın kodda "user_profiles" yazıyordu, aynen bıraktım.
+        table = "user_profiles" 
 
-# --- YENİ EKLENDİ: Üniversiteler Tablosu ---
+# --- Üniversiteler Tablosu ---
 class University(models.Model):
     university_id = fields.IntField(pk=True)
     name = fields.CharField(max_length=255)
@@ -33,14 +40,13 @@ class University(models.Model):
     class Meta:
         table = "universities"
 
-# 3. Etkinlikler Tablosu (GÜNCELLENDİ)
+# 3. Etkinlikler Tablosu
 class Event(models.Model):
     event_id = fields.IntField(pk=True)
     title = fields.CharField(max_length=255)
     description = fields.TextField(null=True)
     location = fields.CharField(max_length=255, null=True)
     
-    # app.py ile uyumlu olması için eklenenler:
     start_datetime = fields.DatetimeField(null=True)
     end_datetime = fields.DatetimeField(null=True)
     
@@ -62,13 +68,12 @@ class FavouriteEvent(models.Model):
     class Meta:
         table = "favourite_events"
 
-# 5. Geri Bildirimler (GÜNCELLENDİ)
+# 5. Geri Bildirimler
 class Feedback(models.Model):
     feedback_id = fields.IntField(pk=True)
     user = fields.ForeignKeyField("models.User", related_name="feedbacks", source_field="user_id")
     event = fields.ForeignKeyField("models.Event", related_name="event_feedbacks", source_field="event_id", null=True)
     
-    # app.py'de kullanılan alanlar eklendi
     type = fields.CharField(max_length=50, null=True) # bug, suggestion vb.
     title = fields.CharField(max_length=255, null=True)
     message = fields.TextField()
@@ -83,7 +88,7 @@ class Feedback(models.Model):
 class ContactUserTypes(models.Model):
     id = fields.IntField(pk=True)
     label = fields.CharField(max_length=100)
-    is_active = fields.BooleanField(default=True) # app.py kullanıyor
+    is_active = fields.BooleanField(default=True)
 
     class Meta:
         table = "contact_user_types"
@@ -92,7 +97,7 @@ class ContactUserTypes(models.Model):
 class ContactTopicTypes(models.Model):
     id = fields.IntField(pk=True)
     label = fields.CharField(max_length=100)
-    is_active = fields.BooleanField(default=True) # app.py kullanıyor
+    is_active = fields.BooleanField(default=True)
 
     class Meta:
         table = "contact_topic_types"
@@ -102,9 +107,9 @@ class ContactMessages(models.Model):
     contact_id = fields.IntField(pk=True)
     full_name = fields.CharField(max_length=255)
     email = fields.CharField(max_length=255)
-    university = fields.CharField(max_length=255, null=True) # app.py kullanıyor
+    university = fields.CharField(max_length=255, null=True)
     message = fields.TextField()
-    consent = fields.BooleanField(default=False) # Rıza metni onayı
+    consent = fields.BooleanField(default=False)
     
     user_type = fields.ForeignKeyField("models.ContactUserTypes", null=True, source_field="user_type_id")
     topic_type = fields.ForeignKeyField("models.ContactTopicTypes", null=True, source_field="topic_type_id")

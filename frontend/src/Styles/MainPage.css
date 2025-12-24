@@ -29,7 +29,7 @@ html {
   width: 100vw;
   height: 100vh;
   z-index: -10;
-  background-color: #4800bd; /* Aurora yüklenene kadar veya alt zemin siyah olsun */
+  background-color: #81559b; /* Aurora yüklenene kadar veya alt zemin siyah olsun */
 }
 
 .video-background {
@@ -99,11 +99,11 @@ html {
   left: -300px;
   width: 250px;
   height: 100%;
-  background-color: #c56900; /* Mevcut tasarım rengi */
+  background-color: #d9c7b9; /* Mevcut tasarım rengi */
   transition: left 0.3s ease-in-out;
   z-index: 1001;
   padding-top: 60px;
-  box-shadow: 5px 0 15px rgba(0, 0, 0, 0.5);
+  box-shadow: 5px 0 15px rgba(252, 0, 0, 0.5);
 }
 
 .sidebar.open {
