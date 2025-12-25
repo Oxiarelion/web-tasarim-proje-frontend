@@ -1,12 +1,13 @@
 @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&display=swap");
+
 html,
 body {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  overflow: hidden; /* Taşmayı engelle */
 }
 
 * {
@@ -14,6 +15,7 @@ body {
   font-family: "Poppins", sans-serif;
 }
 
+/* Ana Konteyner */
 .login-page-container {
   position: fixed;
   top: 0;
@@ -24,10 +26,10 @@ body {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  /* Arka plan resmini kaldırdık, çünkü artık video var */
+  /* Arka plan video tarafından hallediliyor */
 }
 
-/* --- VIDEO ARKA PLAN STİLLERİ --- */
+/* --- VIDEO ARKA PLAN --- */
 .video-background {
   position: absolute;
   top: 0;
@@ -41,7 +43,7 @@ body {
 .video-background video {
   width: 100%;
   height: 100%;
-  object-fit: cover; /* Videoyu orantılı şekilde ekrana yay */
+  object-fit: cover; /* Videoyu orantılı yay */
 }
 
 .video-overlay {
@@ -50,104 +52,127 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.4); /* Siyahlık oranı. %40 koyuluk */
-  z-index: 1; /* Videonun üstünde dursun */
+  background: rgba(
+    0,
+    0,
+    0,
+    0.45
+  ); /* %45 koyuluk (yazılar daha net okunsun diye arttırdım) */
+  backdrop-filter: blur(3px); /* Videoyu hafif buzla */
+  z-index: 1;
 }
 
+/* Başlık */
 .app-title {
-  font-family: "Fraunces", serif; /* Recoleta benzeri font */
-
-  font-size: 4.64855598048rem; /* Büyük ve okunaklı */
-  font-weight: 700; /* Kalın (Bold) */
-  font-variation-settings: "SOFT" 100; /* Kenarları yumuşat (Recoleta hissi verir) */
-
+  font-family: "Fraunces", serif;
+  font-size: 4rem; /* Biraz küçülttüm, mobilde taşmasın diye */
+  font-weight: 700;
+  font-variation-settings: "SOFT" 100;
   color: #ffffff;
-  margin-bottom: 100px;
+  margin-bottom: 40px; /* Kart ile başlık arasını biraz açtım */
   text-align: center;
   z-index: 2;
-
-  /* Harfler birbirine çok hafif değsin, daha samimi durur */
   letter-spacing: -1.5px;
-
-  /* Videonun üzerinde okunması için gölge */
   text-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+  transform: translateY(-20px);
 }
 
+/* Glassmorphism Kart */
 .login-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.1); /* %10 beyaz */
+  backdrop-filter: blur(20px); /* Buzlu cam */
   -webkit-backdrop-filter: blur(20px);
-  border-radius: 50px;
+  border-radius: 40px;
   padding: 40px;
   width: 90%;
-  max-width: 450px;
+  max-width: 420px;
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(10, 192, 4, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.15); /* Çerçeveyi düzelttim */
   display: flex;
   flex-direction: column;
   align-items: center;
-  z-index: 2; /* Perdenin önünde */
-  transform: translateY(-70px);
+  z-index: 2;
+  /* translateY kaldırdım, flex ile ortalıyoruz zaten */
 }
 
-/* --- GERİ KALAN AYARLAR AYNI --- */
+/* Kart Header */
 .card-header {
   width: 100%;
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 25px;
 }
+
 .lock-icon-container {
   width: 60px;
   height: 60px;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 15px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
+
 .welcome-title {
   color: #fff;
   margin: 0;
   font-size: 1.8rem;
+  font-weight: 600;
 }
+
 .welcome-subtitle {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.85);
   margin-top: 5px;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
+
+/* Form */
 .login-form {
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 15px;
 }
+
 .input-group {
   position: relative;
   width: 100%;
 }
+
 .login-input {
   width: 100%;
-  padding: 12px 12px 12px 45px;
-  border-radius: 8px;
-  border: none;
-  background: rgba(255, 255, 255, 0.2);
+  padding: 14px 14px 14px 45px; /* İkon boşluğu */
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15); /* Input içi yarı saydam */
   color: #fff;
   font-size: 1rem;
   outline: none;
+  transition: all 0.2s ease;
 }
+
+.login-input:focus {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
 .login-input::placeholder {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.65);
 }
+
 .input-icon {
   position: absolute;
   left: 15px;
   top: 50%;
   transform: translateY(-50%);
-  color: #fff;
-  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.2rem;
+  display: flex; /* SVG ortalamak için */
 }
+
+/* Şifre Göster/Gizle Butonu */
 .toggle-password-btn {
   position: absolute;
   right: 15px;
@@ -155,54 +180,104 @@ body {
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: #fff;
+  color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
   display: flex;
+  padding: 0;
 }
+
+.toggle-password-btn:hover {
+  color: #fff;
+}
+
+/* Buton */
 .login-button {
   width: 100%;
-  padding: 12px;
-  margin-top: 10px;
+  padding: 14px;
+  margin-top: 15px;
   border: none;
-  border-radius: 8px;
-  background: #fd9356;
-  background: linear-gradient(90deg, #14b982 0%, #31045c 100%);
+  border-radius: 12px;
+  /* Yeşil-Mor geçiş (Senin görseline uygun) */
+  background: linear-gradient(90deg, #10b981 0%, #4f46e5 100%);
   color: white;
   font-size: 1rem;
-  font-weight: bold;
+  font-weight: 600;
   cursor: pointer;
-  transition: 0.3s;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
+
 .login-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
   filter: brightness(1.1);
-  transform: scale(1.02);
 }
+
+.login-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Footer Linkleri */
 .form-footer {
-  margin-top: 20px;
+  margin-top: 25px;
   text-align: center;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: rgba(255, 255, 255, 0.9);
 }
-.form-footer a {
+
+.form-footer a,
+.form-footer span {
   color: #fff;
   text-decoration: none;
-  font-weight: bold;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
 }
+
+.form-footer a:hover,
+.form-footer span:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+/* Mesaj Kutuları */
 .message-box {
-  padding: 10px;
-  border-radius: 5px;
+  padding: 12px;
+  border-radius: 8px;
   margin-bottom: 10px;
   font-size: 0.9rem;
   text-align: center;
   width: 100%;
+  backdrop-filter: blur(5px);
 }
+
 .message-box.error {
-  background: rgba(255, 0, 0, 0.3);
-  color: #ffcccc;
-  border: 1px solid red;
+  background: rgba(220, 38, 38, 0.25); /* Kırmızı */
+  color: #fca5a5;
+  border: 1px solid rgba(220, 38, 38, 0.4);
 }
+
 .message-box.success {
-  background: rgba(0, 255, 0, 0.3);
-  color: #ccffcc;
-  border: 1px solid green;
+  background: rgba(22, 163, 74, 0.25); /* Yeşil */
+  color: #86efac;
+  border: 1px solid rgba(22, 163, 74, 0.4);
+}
+
+/* RESPONSIVE (Mobil Uyumluluk) */
+@media (max-width: 480px) {
+  .app-title {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+  }
+
+  .login-card {
+    padding: 30px 20px;
+    width: 90%;
+  }
+
+  .welcome-title {
+    font-size: 1.5rem;
+  }
 }

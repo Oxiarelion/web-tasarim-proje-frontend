@@ -14,21 +14,26 @@ class User(models.Model):
     class Meta:
         table = "users"
 
-# 2. Kullanıcı Profili (GÜNCELLENDİ: EKSİK ALANLAR EKLENDİ)
+# 2. Kullanıcı Profili (DÜZELTİLDİ: TextField ve Cover Photo)
 class UserProfile(models.Model):
-    user = fields.OneToOneField("models.User", related_name="profile", source_field="user_id", pk=True)
-    bio = fields.TextField(null=True)
-    profile_photo = fields.CharField(max_length=255, null=True)
-    full_name = fields.CharField(max_length=255, null=True)
+    # Tabloyu silip yeniden oluşturacağımız için id alanını standartlaştırdım
+    id = fields.IntField(pk=True)
     
-    # --- YENİ EKLENEN ALANLAR ---
+    # Kullanıcı ile ilişki (OneToOne)
+    user = fields.OneToOneField("models.User", related_name="profile", source_field="user_id")
+    
+    full_name = fields.CharField(max_length=255, null=True)
+    bio = fields.TextField(null=True)
+    
+    # 🔥 DÜZELTME: Resimler uzun olduğu için TextField yaptık
+    profile_photo = fields.TextField(null=True) 
+    cover_photo = fields.TextField(null=True)   
+    
     department = fields.CharField(max_length=255, null=True)
     grade = fields.CharField(max_length=50, null=True)
     phone_number = fields.CharField(max_length=255, null=True)
     
     class Meta:
-        # DİKKAT: Veritabanında tablonun adı "userprofile" ise burayı "userprofile" yapman gerekebilir.
-        # Senin attığın kodda "user_profiles" yazıyordu, aynen bıraktım.
         table = "user_profiles" 
 
 # --- Üniversiteler Tablosu ---
@@ -61,6 +66,8 @@ class Event(models.Model):
 
 # 4. Favori Etkinlikler
 class FavouriteEvent(models.Model):
+    # id eklemek Tortoise ORM için daha sağlıklıdır
+    id = fields.IntField(pk=True)
     user = fields.ForeignKeyField("models.User", related_name="favorites", source_field="user_id")
     event = fields.ForeignKeyField("models.Event", related_name="favorited_by", source_field="event_id")
     added_at = fields.DatetimeField(auto_now_add=True)
@@ -77,7 +84,7 @@ class Feedback(models.Model):
     type = fields.CharField(max_length=50, null=True) # bug, suggestion vb.
     title = fields.CharField(max_length=255, null=True)
     message = fields.TextField()
-    status = fields.CharField(max_length=50, default="pending") # pending, resolved
+    status = fields.CharField(max_length=50, default="pending") 
 
     created_at = fields.DatetimeField(auto_now_add=True)
 

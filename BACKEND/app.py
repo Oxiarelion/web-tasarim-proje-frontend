@@ -24,6 +24,10 @@ CORS(app)
 # --- GİZLİ ANAHTAR ---
 SECRET_KEY = os.getenv("SECRET_KEY", "bu_cok_gizli_ve_uzun_bir_sifredir_kimse_bilmemeli_12345")
 
+# 🔥 BASİT RAM ÖNBELLEĞİ (CACHE) 🔥
+# Kullanıcı profillerini burada tutacağız: {user_id: {profil_verisi}}
+PROFILE_CACHE = {}
+
 # -------------------------------------------------
 # TOKEN KONTROL (Middleware)
 # -------------------------------------------------
@@ -74,7 +78,6 @@ async def init_orm(app, loop):
         timezone="UTC",
         use_tz=True,
     )
-    # AWS'de tabloları bozmamak için hata yakalamalı generate
     try:
         await Tortoise.generate_schemas()
     except:
@@ -150,7 +153,6 @@ async def kayit_ol(request):
         return json({"basarili": False, "mesaj": "Bu e-posta zaten kayıtlı."}, status=409)
 
     user = await User.create(email=email, password=password)
-    # Boş profil oluştur (Hata almamak için önemli)
     await UserProfile.create(
         user=user, 
         full_name=full_name,
@@ -158,7 +160,8 @@ async def kayit_ol(request):
         department="",
         grade="",
         phone_number="",
-        profile_photo=""
+        profile_photo="",
+        cover_photo=""
     )
 
     return json({"basarili": True, "mesaj": "Hesabınız başarıyla oluşturuldu!"}, status=201)
@@ -326,7 +329,7 @@ async def etkinlikler(request):
 
 
 # -------------------------------------------------
-# 🔥 DÜZELTİLEN KISIM: Takvime Ekle (ÇOKLU SİLME)
+# Takvime Ekle (ÇOKLU SİLME)
 # -------------------------------------------------
 @app.post("/api/takvim/ekle")
 @authorized()
@@ -347,18 +350,13 @@ async def takvime_ekle(request):
         if not event:
             return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
 
-        # ÖNCE KONTROL EDİYORUZ: Bu kullanıcı bu etkinliği eklemiş mi?
         existing_favs = await FavouriteEvent.filter(user=user, event=event).all()
 
         if existing_favs:
-            # Eğer varsa (1 tane veya 10 tane fark etmez), HEPSİNİ SİLİYORUZ.
             await FavouriteEvent.filter(user=user, event=event).delete()
-            print(f"🗑️ Favorilerden Silindi: {user.email} -> Event {event.event_id}")
             return json({"basarili": True, "mesaj": "Favorilerden çıkarıldı.", "durum": "cikarildi"}, status=200)
         else:
-            # Yoksa yeni bir tane oluşturuyoruz.
             await FavouriteEvent.create(user=user, event=event)
-            print(f"✅ Favorilere Eklendi: {user.email} -> Event {event.event_id}")
             return json({"basarili": True, "mesaj": "Favorilere eklendi.", "durum": "eklendi"}, status=200)
     
     except Exception as e:
@@ -630,46 +628,58 @@ async def list_messages(request):
 
 
 # -------------------------------------------------
-# 👤 PROFİL İŞLEMLERİ
+# 👤 PROFİL İŞLEMLERİ (CACHE EKLENDİ)
 # -------------------------------------------------
 
-# 1. Profil Bilgilerini Getir
+# 1. Profil Bilgilerini Getir (CACHE KULLANIYOR)
 @app.get("/api/profile")
 @authorized()
 async def get_profile(request):
     try:
         user_id = request.ctx.user_id
         
+        # 🔥 ÖNCE RAM'DEKİ CACHE'E BAK
+        if user_id in PROFILE_CACHE:
+            print(f"⚡ Cache'den getirildi: {user_id}")
+            return json(PROFILE_CACHE[user_id])
+
         # Kullanıcıyı ve profilini çek
         user = await User.get_or_none(user_id=user_id).prefetch_related("profile")
         
         if not user:
             return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
 
-        # Profil tablosu (UserProfile) henüz oluşmamışsa (eski kullanıcılar için) boş oluştur
         if not user.profile:
-            await UserProfile.create(user=user, full_name="", bio="", profile_photo="")
+            await UserProfile.create(user=user, full_name="", bio="", profile_photo="", cover_photo="")
             user = await User.get_or_none(user_id=user_id).prefetch_related("profile")
 
-        return json({
+        response_data = {
             "basarili": True,
             "profile": {
                 "email": user.email,
                 "full_name": user.profile.full_name or "",
                 "bio": user.profile.bio or "",
                 "profile_photo": user.profile.profile_photo or "",
+                "cover_photo": user.profile.cover_photo or "",
                 "role": user.role,
                 "department": user.profile.department or "", 
                 "grade": user.profile.grade or "",
                 "phone_number": user.profile.phone_number or ""
             }
-        })
+        }
+        
+        # 🔥 VERİTABANINDAN ALDIKTAN SONRA CACHE'E KAYDET
+        PROFILE_CACHE[user_id] = response_data
+        print(f"💾 Cache'e kaydedildi: {user_id}")
+        
+        return json(response_data)
+        
     except Exception as e:
         print(f"Profil Getirme Hatası: {e}")
         return json({"basarili": False, "mesaj": str(e)}, status=500)
 
 
-# 2. Profil Bilgilerini Güncelle
+# 2. Profil Bilgilerini Güncelle (CACHE TEMİZLER)
 @app.put("/api/profile")
 @authorized()
 async def update_profile(request):
@@ -681,15 +691,14 @@ async def update_profile(request):
         if not user:
             return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
 
-        # Verileri al
         new_name = data.get("full_name")
         new_bio = data.get("bio")
         new_dept = data.get("department")
         new_grade = data.get("grade")
         new_phone = data.get("phone_number")
-        new_photo = data.get("profile_photo") # Base64 string veya URL gelebilir
+        new_photo = data.get("profile_photo")
+        new_cover = data.get("cover_photo")
 
-        # Profil yoksa oluştur, varsa güncelle
         if user.profile:
             if new_name is not None: user.profile.full_name = new_name
             if new_bio is not None: user.profile.bio = new_bio
@@ -697,6 +706,7 @@ async def update_profile(request):
             if new_grade is not None: user.profile.grade = new_grade
             if new_phone is not None: user.profile.phone_number = new_phone
             if new_photo is not None: user.profile.profile_photo = new_photo
+            if new_cover is not None: user.profile.cover_photo = new_cover
             
             await user.profile.save()
         else:
@@ -707,8 +717,15 @@ async def update_profile(request):
                 department=new_dept or "",
                 grade=new_grade or "",
                 phone_number=new_phone or "",
-                profile_photo=new_photo or ""
+                profile_photo=new_photo or "",
+                cover_photo=new_cover or ""
             )
+
+        # 🔥 PROFİL GÜNCELLENDİĞİ İÇİN CACHE'İ SİL
+        # Böylece bir sonraki istekte veritabanından taze veri çekilecek
+        if user_id in PROFILE_CACHE:
+            del PROFILE_CACHE[user_id]
+            print(f"🗑️ Cache temizlendi: {user_id}")
 
         return json({"basarili": True, "mesaj": "Profil başarıyla güncellendi."})
 

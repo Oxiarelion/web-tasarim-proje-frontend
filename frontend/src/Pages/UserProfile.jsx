@@ -1,6 +1,11 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "../Styles/UserProfile.css";
+
+// YEDEK RESİMLER
+const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+const DEFAULT_COVER =
+  "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1600&q=80";
 
 export default function UserProfile() {
   const navigate = useNavigate();
@@ -12,6 +17,10 @@ export default function UserProfile() {
   const [active, setActive] = useState("overview");
   const [loading, setLoading] = useState(true);
 
+  // Dosya Yükleme Referansları
+  const avatarInputRef = useRef(null);
+  const coverInputRef = useRef(null);
+
   // Form State
   const [editForm, setEditForm] = useState({
     full_name: "",
@@ -19,6 +28,8 @@ export default function UserProfile() {
     department: "",
     grade: "",
     phone_number: "",
+    profile_photo: "",
+    cover_photo: "",
   });
 
   const handleLogout = () => {
@@ -60,6 +71,8 @@ export default function UserProfile() {
             department: profileData.profile.department || "",
             grade: profileData.profile.grade || "",
             phone_number: profileData.profile.phone_number || "",
+            profile_photo: profileData.profile.profile_photo || "",
+            cover_photo: profileData.profile.cover_photo || "",
           });
         }
 
@@ -76,22 +89,63 @@ export default function UserProfile() {
     fetchData();
   }, [token, navigate]);
 
-  // --- 2. Kaydetme İşlemi ---
-  const handleSave = async () => {
+  // --- 2. Dosya Seçme, Base64'e Çevirme ve OTOMATİK KAYDETME ---
+  // 🔥 GÜNCELLENDİ: Dosya seçildiği an handleSave'i tetikler.
+  const handleFileChange = (e, fieldName) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+
+      reader.onloadend = () => {
+        const result = reader.result;
+
+        // 1. Ekranda anlık göster (Preview)
+        setUserData((prev) => ({ ...prev, [fieldName]: result }));
+        setEditForm((prev) => ({ ...prev, [fieldName]: result }));
+
+        // 2. 🔥 ANINDA VERİTABANINA KAYDET 🔥
+        // State'in güncellenmesini beklemeden, elimizdeki veriyi direkt gönderiyoruz.
+        // Bu sayede butona basmaya gerek kalmadan veritabanına işleniyor.
+        handleSave({ [fieldName]: result });
+      };
+
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // --- 3. Kaydetme İşlemi ---
+  // 🔥 GÜNCELLENDİ: overrideData varsa (otomatik kayıt), alert ve sayfa değişimi yapmaz.
+  const handleSave = async (overrideData = null) => {
     try {
+      // Eğer dışarıdan özel veri geldiyse (örn: yeni resim), onu mevcut form ile birleştir.
+      // Yoksa sadece formdaki mevcut verileri kullan.
+      const dataToSend = overrideData
+        ? { ...editForm, ...overrideData }
+        : editForm;
+
       const res = await fetch("http://127.0.0.1:8000/api/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(dataToSend),
       });
       const data = await res.json();
+
       if (data.basarili) {
-        alert("Profil güncellendi! ✅");
-        setUserData((prev) => ({ ...prev, ...editForm }));
-        setActive("overview");
+        // Eğer bu bir MANUEL kayıt ise (butona basıldıysa) uyarı ver ve sekmeyi değiştir.
+        if (!overrideData) {
+          alert("Profil güncellendi! ✅");
+          setActive("overview");
+        } else {
+          // Otomatik kayıtsa (resim yükleme) sadece konsola yaz, kullanıcıyı bölme.
+          console.log("Otomatik resim kaydı başarılı.");
+        }
+
+        // State'leri güncelle ki ekranda son hali kalsın
+        setUserData((prev) => ({ ...prev, ...dataToSend }));
+        setEditForm((prev) => ({ ...prev, ...dataToSend }));
       } else {
         alert("Hata: " + data.mesaj);
       }
@@ -119,23 +173,64 @@ export default function UserProfile() {
     <div className="pp">
       {/* COVER & HEADER */}
       <header className="pp__cover">
+        {/* Kapak Fotoğrafı */}
         <img
           className="pp__coverImg"
-          src="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1600&q=80"
+          src={userData.cover_photo || DEFAULT_COVER}
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = DEFAULT_COVER;
+          }}
           alt="Kapak"
         />
         <div className="pp__coverOverlay" />
 
+        {/* Kapak Değiştirme Butonu */}
+        <input
+          type="file"
+          ref={coverInputRef}
+          style={{ display: "none" }}
+          accept="image/*"
+          onChange={(e) => handleFileChange(e, "cover_photo")}
+        />
+        <button
+          className="pp__changeCoverBtn"
+          onClick={() => coverInputRef.current.click()}
+          title="Kapak Fotoğrafını Değiştir"
+        >
+          📷 Kapağı Değiştir
+        </button>
+
         <div className="pp__coverInner">
           <div className="pp__identity">
             <div className="pp__avatarWrap">
+              {/* Profil Fotoğrafı */}
               <img
                 className="pp__avatar"
-                src={
-                  userData.profile_photo || "https://via.placeholder.com/150"
-                }
+                src={userData.profile_photo || DEFAULT_AVATAR}
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = DEFAULT_AVATAR;
+                }}
                 alt="Avatar"
               />
+
+              {/* Avatar Değiştirme İkonu */}
+              <input
+                type="file"
+                ref={avatarInputRef}
+                style={{ display: "none" }}
+                accept="image/*"
+                onChange={(e) => handleFileChange(e, "profile_photo")}
+              />
+              <div
+                className="pp__avatarOverlay"
+                onClick={() => avatarInputRef.current.click()}
+                title="Profil Fotoğrafını Değiştir"
+              >
+                📷
+              </div>
+
               <span className="pp__statusDot" title="Aktif" />
             </div>
 
@@ -167,6 +262,17 @@ export default function UserProfile() {
             >
               ✏️ Profili Düzenle
             </button>
+
+            {/* Manuel Kaydetme butonu (Sadece resimler dışındaki değişiklikler için gerekebilir) */}
+            {(editForm.profile_photo !== userData.profile_photo ||
+              editForm.cover_photo !== userData.cover_photo) && (
+              <button
+                className="pp__btn pp__btnSuccess"
+                onClick={() => handleSave()}
+              >
+                💾 Değişiklikleri Kaydet
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -199,7 +305,7 @@ export default function UserProfile() {
           </aside>
 
           <main className="pp__main">
-            {/* 1. GENEL BAKIŞ (SADECE ETKİNLİKLER) */}
+            {/* 1. GENEL BAKIŞ */}
             {active === "overview" && (
               <section className="pp__card">
                 <div className="pp__cardHeader">
@@ -252,13 +358,11 @@ export default function UserProfile() {
                           })
                         }
                       />
-
                       <Field
                         label="E-posta"
                         defaultValue={userData.email}
                         readOnly={true}
                       />
-
                       <Field
                         label="Bölüm"
                         defaultValue={editForm.department}
@@ -269,7 +373,6 @@ export default function UserProfile() {
                           })
                         }
                       />
-
                       <Field
                         label="Sınıf"
                         defaultValue={editForm.grade}
@@ -277,7 +380,6 @@ export default function UserProfile() {
                           setEditForm({ ...editForm, grade: e.target.value })
                         }
                       />
-
                       <Field
                         label="Telefon Numarası"
                         defaultValue={editForm.phone_number}
@@ -288,7 +390,6 @@ export default function UserProfile() {
                           })
                         }
                       />
-
                       <Field
                         label="Bio"
                         defaultValue={editForm.bio}
@@ -300,7 +401,7 @@ export default function UserProfile() {
                     <button
                       className="pp__btn pp__btnPrimary"
                       type="button"
-                      onClick={handleSave}
+                      onClick={() => handleSave()}
                     >
                       Kaydet
                     </button>
@@ -328,7 +429,7 @@ export default function UserProfile() {
   );
 }
 
-// Helper (Field bileşeni gerekli olduğu için tutuyoruz, InfoRow artık sadece düzenlemede gerekebilir ama kodda kalsın zararı yok)
+// Helper
 function Field({
   label,
   type = "text",
