@@ -1,7 +1,6 @@
 services:
   backend:
-    build:
-      context: ./BACKEND
+    image: ghcr.io/oxiareliion/web-tasarim-proje-frontend-backend:latest
     container_name: app-backend
     ports:
       - "8000:8000"
@@ -10,8 +9,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
+    image: ghcr.io/oxiareliion/web-tasarim-proje-frontend-frontend:latest
     container_name: app-frontend
     ports:
       - "80:80"
