@@ -460,3 +460,114 @@ abbr[title] {
   border-color: rgba(220, 38, 38, 0.5);
   box-shadow: 0 0 10px rgba(220, 38, 38, 0.4);
 }
+
+/* --- 🔥 ARAMA KUTUSU & DROPDOWN STİLLERİ 🔥 --- */
+
+.search-wrapper {
+  position: relative; /* Dropdown buna göre konumlanacak */
+  width: 280px; /* Genişlik */
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px; /* Hap şeklinde */
+  padding: 5px 15px;
+  backdrop-filter: blur(5px);
+  transition: all 0.3s ease;
+}
+
+.search-box:focus-within {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: #fbbf24; /* Odaklanınca sarı çerçeve */
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+}
+
+.search-icon {
+  font-size: 1.1rem;
+  margin-right: 8px;
+  opacity: 0.7;
+}
+
+.search-input {
+  background: transparent;
+  border: none;
+  color: white;
+  width: 100%;
+  outline: none;
+  font-size: 0.95rem;
+}
+
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* --- ARAMA SONUÇLARI DROPDOWN --- */
+.search-dropdown {
+  position: absolute;
+  top: 110%; /* Kutunun hemen altı */
+  left: 0;
+  width: 100%;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  z-index: 2000;
+  max-height: 300px;
+  overflow-y: auto; /* Çok sonuç varsa kaydır */
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background 0.2s;
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.search-result-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.search-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.search-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.search-name {
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.search-dept {
+  color: #aaa;
+  font-size: 0.75rem;
+}
+
+/* Scrollbar düzeltme (Dropdown için) */
+.search-dropdown::-webkit-scrollbar {
+  width: 5px;
+}
+.search-dropdown::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}

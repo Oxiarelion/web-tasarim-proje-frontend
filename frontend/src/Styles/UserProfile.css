@@ -4,7 +4,7 @@
   background: #060a14;
   color: #e8eefc;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial,
-    "Helvetica Neue", Helvetica;
+    sans-serif;
 }
 
 .pp-loading {
@@ -42,6 +42,36 @@
     rgba(6, 10, 20, 0.35),
     rgba(6, 10, 20, 0.08)
   );
+  pointer-events: none; /* 🔥 ÖNEMLİ: Tıklamayı engellemesin */
+}
+
+/* --- Kapağı Değiştir Butonu --- */
+.pp__changeCoverBtn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 8px 15px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  z-index: 9999; /* 🔥 En üstte */
+  transition: all 0.3s ease;
+  opacity: 0; /* 🔥 Varsayılan olarak gizli */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Header üzerine gelince buton görünsün */
+.pp__cover:hover .pp__changeCoverBtn {
+  opacity: 1;
+}
+
+.pp__changeCoverBtn:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .pp__coverInner {
@@ -55,6 +85,7 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+  pointer-events: none; /* Inner div tıklamayı kesmesin */
 }
 
 .pp__identity {
@@ -62,79 +93,80 @@
   align-items: flex-end;
   gap: 16px;
   min-width: 0;
+  pointer-events: auto; /* İçerik tıklanabilir olsun */
 }
 
-/* --- PROFİL RESMİ KUTUSU (WRAPPER) --- */
+/* --- PROFİL RESMİ KUTUSU --- */
 .pp__avatarWrap {
   position: relative;
   width: 130px;
   height: 130px;
   flex: 0 0 auto;
-
   border-radius: 50%;
   border: 4px solid #060a14;
   background-color: #1e293b;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
-
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  z-index: 50;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* --- PROFİL RESMİ (IMG) --- */
+.pp__avatarWrap:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 24px rgba(100, 150, 255, 0.3);
+}
+
 .pp__avatar {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center;
   display: block;
-  border-radius: 50%;
 }
 
-/* Avatar Üzeri Kamera İkonu */
+/* --- KAMERA İKONU (Overlay) --- */
 .pp__avatarOverlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   font-size: 2rem;
-  opacity: 0;
+  opacity: 0; /* 🔥 Varsayılan olarak gizli */
   cursor: pointer;
-  transition: opacity 0.3s ease;
-  z-index: 5;
+  transition: opacity 0.3s ease, background 0.3s ease;
+  z-index: 100;
+  user-select: none;
+  pointer-events: none;
 }
 
+/* Mouse avatar üzerine gelince ikon görünsün */
 .pp__avatarWrap:hover .pp__avatarOverlay {
   opacity: 1;
 }
 
-/* 🔥 DÜZELTİLEN YEŞİL NOKTA 🔥 */
-.pp__statusDot {
-  position: absolute;
-  right: 5px;
-  bottom: 5px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #34d399;
-  border: 3px solid #060a14;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  z-index: 20;
+.pp__avatarWrap:hover .pp__avatarOverlay:hover {
+  background: rgba(0, 0, 0, 0.75);
 }
 
 .pp__who {
   padding-bottom: 4px;
   min-width: 0;
+  pointer-events: auto;
 }
 .pp__name {
   margin: 0;
   font-size: 30px;
   line-height: 1.15;
   letter-spacing: 0.2px;
+  font-weight: 700;
+  color: #fff;
 }
 .pp__meta {
   margin-top: 6px;
@@ -176,6 +208,7 @@
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
+  pointer-events: auto;
 }
 .pp__btn {
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -184,17 +217,13 @@
   padding: 10px 14px;
   border-radius: 16px;
   cursor: pointer;
-  transition: transform 0.08s ease, background 0.15s ease,
-    border-color 0.15s ease;
+  transition: 0.2s;
   font-weight: 600;
   font-size: 13px;
 }
 .pp__btn:hover {
   background: rgba(15, 23, 42, 0.9);
   border-color: rgba(255, 255, 255, 0.22);
-}
-.pp__btn:active {
-  transform: translateY(1px);
 }
 .pp__btnPrimary {
   background: rgba(255, 255, 255, 0.92);
@@ -203,43 +232,6 @@
 }
 .pp__btnPrimary:hover {
   background: #ffffff;
-}
-.pp__btnSuccess {
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: white;
-  border: none;
-  margin-left: 10px;
-}
-.pp__btnSuccess:hover {
-  filter: brightness(1.1);
-  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-}
-.pp__btnDanger {
-  background: rgba(244, 63, 94, 0.95);
-  border-color: rgba(244, 63, 94, 0.55);
-  color: white;
-}
-.pp__btnDanger:hover {
-  background: rgba(244, 63, 94, 1);
-}
-
-/* Kapak Değiştir Butonu */
-.pp__changeCoverBtn {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 8px 15px;
-  border-radius: 20px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  z-index: 10;
-  transition: all 0.3s ease;
-}
-.pp__changeCoverBtn:hover {
-  background: rgba(255, 255, 255, 0.2);
 }
 
 /* BODY LAYOUT */
@@ -288,7 +280,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: rgba(232, 238, 252, 0.88);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: 0.15s ease;
   font-weight: 700;
   font-size: 13px;
 }
@@ -351,21 +343,16 @@
   font-size: 13px;
 }
 
-/* 🔥 EVENTS GRID - GÜNCELLENDİ (SCROLLBAR EKLENDİ) 🔥 */
+/* EVENTS GRID */
 .pp__eventsGrid {
   margin-top: 12px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-
-  /* YENİ EKLENEN KISIMLAR: */
-  max-height: 500px; /* Maksimum yükseklik */
-  overflow-y: auto; /* Taşan kısımda scrollbar çıkar */
-  align-content: start; /* Kartları yukarı hizalar */
-  padding-right: 8px; /* Scrollbar içeriğin üstüne binmesin */
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 8px;
 }
-
-/* 🔥 Scrollbar Tasarımı (Koyu Tema) 🔥 */
 .pp__eventsGrid::-webkit-scrollbar {
   width: 6px;
 }
@@ -387,6 +374,7 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(6, 10, 20, 0.3);
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.25);
+  position: relative;
 }
 .pp__eventImgWrap {
   position: relative;
@@ -434,7 +422,6 @@
   color: rgba(232, 238, 252, 0.72);
 }
 
-/* RESPONSIVE */
 @media (max-width: 980px) {
   .pp__coverInner {
     flex-direction: column;
@@ -446,8 +433,6 @@
   .pp__grid {
     grid-template-columns: 1fr;
   }
-  .pp__infoGrid,
-  .pp__formGrid,
   .pp__eventsGrid {
     grid-template-columns: 1fr;
   }

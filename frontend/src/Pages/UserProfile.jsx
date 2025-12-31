@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import "../Styles/UserProfile.css";
 
-// YEDEK RESİMLER
 const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
 const DEFAULT_COVER =
   "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1600&q=80";
@@ -11,15 +10,17 @@ export default function UserProfile() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
+  // File input refs
+  const avatarInputRef = React.useRef(null);
+  const coverInputRef = React.useRef(null);
+
   // State'ler
   const [userData, setUserData] = useState(null);
-  const [favoriEtkinlikler, setFavoriEtkinlikler] = useState([]);
   const [active, setActive] = useState("overview");
   const [loading, setLoading] = useState(true);
-
-  // Dosya Yükleme Referansları
-  const avatarInputRef = useRef(null);
-  const coverInputRef = useRef(null);
+  const [favoriEtkinlikler, setFavoriEtkinlikler] = useState([]);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   // Form State
   const [editForm, setEditForm] = useState({
@@ -51,106 +52,174 @@ export default function UserProfile() {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        if (!profileRes.ok) {
+        if (profileRes.status === 401) {
           handleLogout();
           return;
         }
-
         const profileData = await profileRes.json();
 
-        const takvimRes = await fetch("http://127.0.0.1:8000/api/takvim", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const takvimData = await takvimRes.json();
+        // Takvim verisini çek (Hata verirse yoksay)
+        try {
+          const takvimRes = await fetch("http://127.0.0.1:8000/api/takvim", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const takvimData = await takvimRes.json();
+          if (takvimData.basarili) setFavoriEtkinlikler(takvimData.takvim);
+        } catch (e) {}
 
         if (profileData.basarili) {
-          setUserData(profileData.profile);
+          const user = profileData.profile;
+          setUserData(user);
           setEditForm({
-            full_name: profileData.profile.full_name || "",
-            bio: profileData.profile.bio || "",
-            department: profileData.profile.department || "",
-            grade: profileData.profile.grade || "",
-            phone_number: profileData.profile.phone_number || "",
-            profile_photo: profileData.profile.profile_photo || "",
-            cover_photo: profileData.profile.cover_photo || "",
+            full_name: user.full_name || "",
+            bio: user.bio || "",
+            department: user.department || "",
+            grade: user.grade || "",
+            phone_number: user.phone_number || "",
+            profile_photo: user.profile_photo || "",
+            cover_photo: user.cover_photo || "",
           });
         }
-
-        if (takvimData.basarili && Array.isArray(takvimData.takvim)) {
-          setFavoriEtkinlikler(takvimData.takvim);
-        }
       } catch (err) {
-        console.error("Veri hatası:", err);
+        console.error(err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [token, navigate]);
 
-  // --- 2. Dosya Seçme, Base64'e Çevirme ve OTOMATİK KAYDETME ---
-  // 🔥 GÜNCELLENDİ: Dosya seçildiği an handleSave'i tetikler.
-  const handleFileChange = (e, fieldName) => {
+  // --- 2. FOTOĞRAF YÜKLEME (TİP AYRIMLI) ---
+  const handleFileUpload = async (e, type) => {
+    console.log("📸 handleFileUpload başladı, type:", type);
+
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
+    if (!file) {
+      console.log("❌ Dosya seçilmedi!");
+      return;
+    }
 
-      reader.onloadend = () => {
-        const result = reader.result;
+    console.log(
+      "✅ Dosya seçildi:",
+      file.name,
+      "Boyut:",
+      file.size,
+      "Tip:",
+      file.type
+    );
 
-        // 1. Ekranda anlık göster (Preview)
-        setUserData((prev) => ({ ...prev, [fieldName]: result }));
-        setEditForm((prev) => ({ ...prev, [fieldName]: result }));
+    // Dosya boyutu kontrolü (5MB)
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+    if (file.size > MAX_SIZE) {
+      alert("Dosya boyutu 5MB'dan küçük olmalıdır.");
+      return;
+    }
 
-        // 2. 🔥 ANINDA VERİTABANINA KAYDET 🔥
-        // State'in güncellenmesini beklemeden, elimizdeki veriyi direkt gönderiyoruz.
-        // Bu sayede butona basmaya gerek kalmadan veritabanına işleniyor.
-        handleSave({ [fieldName]: result });
-      };
+    // Dosya türü kontrolü
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!validTypes.includes(file.type)) {
+      alert("Lütfen JPG, PNG, WebP veya GIF formatında bir dosya seçiniz.");
+      return;
+    }
 
-      reader.readAsDataURL(file);
+    // Loading state'i set et
+    if (type === "cover") {
+      setUploadingCover(true);
+    } else {
+      setUploadingAvatar(true);
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    console.log("🔥 FormData oluşturuldu, Backend'e gönderiliyor...");
+
+    try {
+      // Type'ı query parameter olarak URL'ye ekle
+      const urlWithType = `http://127.0.0.1:8000/api/profil/foto-guncelle?type=${encodeURIComponent(
+        type
+      )}`;
+      console.log("📍 URL:", urlWithType);
+
+      const res = await fetch(urlWithType, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      console.log("📡 Backend'den yanıt alındı, status:", res.status);
+
+      const data = await res.json();
+      console.log("📦 Backend Yanıtı:", data);
+
+      if (data.basarili) {
+        const photoType = type === "cover" ? "Kapak" : "Profil";
+        console.log(`✅ ${photoType} fotoğrafı başarıyla güncellendi! 📸`);
+
+        // Ekranda anında güncelle (optimistic update) - HEMEN GÖSTERİL
+        if (type === "cover") {
+          setUserData((prev) => ({ ...prev, cover_photo: data.foto }));
+        } else {
+          setUserData((prev) => ({ ...prev, profile_photo: data.foto }));
+        }
+
+        // Cache'i temizle - BACKGROUND'DA YAP (beklemeden devam et)
+        // Böylece kullanıcı UI blok olmaz
+        (async () => {
+          console.log("🔄 Background: Profile verisini yeniden çekiliyor...");
+          try {
+            const refreshRes = await fetch(
+              "http://127.0.0.1:8000/api/profile",
+              {
+                headers: { Authorization: `Bearer ${token}` },
+              }
+            );
+            const refreshData = await refreshRes.json();
+            if (refreshData.basarili) {
+              console.log("✅ Background: Cache temizlendi");
+            }
+          } catch (err) {
+            console.warn("⚠️ Background revalidate hatası:", err);
+          }
+        })();
+      } else {
+        console.log("❌ Backend hatası:", data.mesaj);
+        alert(
+          "Hata: " + (data.mesaj || "Fotoğraf yüklenirken bir hata oluştu.")
+        );
+      }
+    } catch (err) {
+      console.error("🔴 Ağ Hatası:", err);
+      alert("Sunucu hatası oluştu. Lütfen daha sonra tekrar deneyiniz.");
+    } finally {
+      // Loading state'ini kapat
+      if (type === "cover") {
+        setUploadingCover(false);
+      } else {
+        setUploadingAvatar(false);
+      }
     }
   };
 
-  // --- 3. Kaydetme İşlemi ---
-  // 🔥 GÜNCELLENDİ: overrideData varsa (otomatik kayıt), alert ve sayfa değişimi yapmaz.
-  const handleSave = async (overrideData = null) => {
+  // --- 3. Profil Bilgilerini Kaydet ---
+  const handleSave = async () => {
     try {
-      // Eğer dışarıdan özel veri geldiyse (örn: yeni resim), onu mevcut form ile birleştir.
-      // Yoksa sadece formdaki mevcut verileri kullan.
-      const dataToSend = overrideData
-        ? { ...editForm, ...overrideData }
-        : editForm;
-
       const res = await fetch("http://127.0.0.1:8000/api/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(dataToSend),
+        body: JSON.stringify(editForm),
       });
       const data = await res.json();
-
       if (data.basarili) {
-        // Eğer bu bir MANUEL kayıt ise (butona basıldıysa) uyarı ver ve sekmeyi değiştir.
-        if (!overrideData) {
-          alert("Profil güncellendi! ✅");
-          setActive("overview");
-        } else {
-          // Otomatik kayıtsa (resim yükleme) sadece konsola yaz, kullanıcıyı bölme.
-          console.log("Otomatik resim kaydı başarılı.");
-        }
-
-        // State'leri güncelle ki ekranda son hali kalsın
-        setUserData((prev) => ({ ...prev, ...dataToSend }));
-        setEditForm((prev) => ({ ...prev, ...dataToSend }));
-      } else {
-        alert("Hata: " + data.mesaj);
+        alert("Bilgiler güncellendi!");
+        setUserData((prev) => ({ ...prev, ...editForm }));
+        setActive("overview");
       }
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -159,97 +228,109 @@ export default function UserProfile() {
       { id: "overview", label: "Genel Bakış (Vitrin)" },
       { id: "edit_profile", label: "Profili Düzenle" },
       { id: "security", label: "Şifre Değiştir" },
-      { id: "notifications", label: "Bildirim Ayarları" },
-      { id: "home", label: "🏠 Ana Sayfaya Dön" },
+      {
+        id: "etkinlikler",
+        label: "📅 Etkinliklere Dön",
+        link: "/tum-etkinlikler",
+      },
+      { id: "home", label: "🏠 Ana Sayfaya Dön", link: "/anasayfa" },
       { id: "logout", label: "Çıkış Yap", danger: true },
     ],
     []
   );
 
   if (loading) return <div className="pp-loading">Yükleniyor...</div>;
-  if (!userData) return <div className="pp-loading">Kullanıcı bulunamadı.</div>;
+
+  const safeUser = userData || {
+    full_name: "Kullanıcı",
+    email: "",
+    bio: "",
+    profile_photo: DEFAULT_AVATAR,
+    cover_photo: DEFAULT_COVER,
+  };
 
   return (
     <div className="pp">
-      {/* COVER & HEADER */}
+      {/* HEADER */}
       <header className="pp__cover">
-        {/* Kapak Fotoğrafı */}
         <img
           className="pp__coverImg"
-          src={userData.cover_photo || DEFAULT_COVER}
-          onError={(e) => {
-            e.target.onerror = null;
-            e.target.src = DEFAULT_COVER;
-          }}
+          src={safeUser.cover_photo || DEFAULT_COVER}
           alt="Kapak"
+          style={{ opacity: uploadingCover ? 0.5 : 1 }}
+          onError={(e) => (e.target.src = DEFAULT_COVER)}
         />
         <div className="pp__coverOverlay" />
 
-        {/* Kapak Değiştirme Butonu */}
-        <input
-          type="file"
-          ref={coverInputRef}
-          style={{ display: "none" }}
-          accept="image/*"
-          onChange={(e) => handleFileChange(e, "cover_photo")}
-        />
+        {/* --- KAPAK FOTOĞRAFI BUTONU --- */}
+        {/* Sadece mouse üzerine gelince görünür (CSS ile) */}
         <button
           className="pp__changeCoverBtn"
-          onClick={() => coverInputRef.current.click()}
-          title="Kapak Fotoğrafını Değiştir"
+          onClick={() => coverInputRef.current?.click()}
+          type="button"
+          disabled={uploadingCover}
         >
-          📷 Kapağı Değiştir
+          {uploadingCover ? "⏳ Kapak Yükleniyor..." : "📷 Kapağı Değiştir"}
         </button>
+
+        <input
+          ref={coverInputRef}
+          type="file"
+          style={{ display: "none" }}
+          onChange={(e) => handleFileUpload(e, "cover")}
+          accept="image/*"
+          disabled={uploadingCover}
+        />
 
         <div className="pp__coverInner">
           <div className="pp__identity">
-            <div className="pp__avatarWrap">
-              {/* Profil Fotoğrafı */}
+            {/* --- AVATAR KUTUSU --- */}
+            <div
+              className="pp__avatarWrap"
+              title="Tıkla, profil fotoğrafını değiştir"
+              onClick={() => avatarInputRef.current?.click()}
+            >
               <img
                 className="pp__avatar"
-                src={userData.profile_photo || DEFAULT_AVATAR}
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = DEFAULT_AVATAR;
-                }}
+                src={safeUser.profile_photo || DEFAULT_AVATAR}
                 alt="Avatar"
+                style={{ opacity: uploadingAvatar ? 0.5 : 1 }}
+                onError={(e) => (e.target.src = DEFAULT_AVATAR)}
               />
 
-              {/* Avatar Değiştirme İkonu */}
-              <input
-                type="file"
-                ref={avatarInputRef}
-                style={{ display: "none" }}
-                accept="image/*"
-                onChange={(e) => handleFileChange(e, "profile_photo")}
-              />
+              {/* --- PROFİL FOTOĞRAFI İKONU (OVERLAY) --- */}
+              {/* Sadece mouse üzerine gelince görünür (CSS ile) */}
               <div
                 className="pp__avatarOverlay"
-                onClick={() => avatarInputRef.current.click()}
                 title="Profil Fotoğrafını Değiştir"
+                style={{ opacity: uploadingAvatar ? 0.8 : undefined }}
               >
-                📷
+                {uploadingAvatar ? "⏳" : "📷"}
               </div>
 
-              <span className="pp__statusDot" title="Aktif" />
+              <input
+                ref={avatarInputRef}
+                type="file"
+                style={{ display: "none" }}
+                onChange={(e) => handleFileUpload(e, "avatar")}
+                accept="image/*"
+                disabled={uploadingAvatar}
+              />
             </div>
 
             <div className="pp__who">
-              <h1 className="pp__name">{userData.full_name || "İsimsiz"}</h1>
+              <h1 className="pp__name">{safeUser.full_name}</h1>
               <div className="pp__meta">
-                <span className="pp__username">{userData.email}</span>
+                <span className="pp__username">{safeUser.email}</span>
                 <span className="pp__sep">•</span>
-                <span className="pp__bio">
-                  {userData.bio || "Biyografi yok."}
-                </span>
+                <span className="pp__bio">{safeUser.bio}</span>
               </div>
-
               <div className="pp__statsRow">
                 <span className="pp__statItem">
-                  📚 {userData.department || "Bölüm Yok"}
+                  📚 {safeUser.department || "Bölüm Yok"}
                 </span>
                 <span className="pp__statItem">
-                  🎓 {userData.grade || "Sınıf Yok"}
+                  🎓 {safeUser.grade || "Sınıf Yok"}
                 </span>
               </div>
             </div>
@@ -262,17 +343,6 @@ export default function UserProfile() {
             >
               ✏️ Profili Düzenle
             </button>
-
-            {/* Manuel Kaydetme butonu (Sadece resimler dışındaki değişiklikler için gerekebilir) */}
-            {(editForm.profile_photo !== userData.profile_photo ||
-              editForm.cover_photo !== userData.cover_photo) && (
-              <button
-                className="pp__btn pp__btnSuccess"
-                onClick={() => handleSave()}
-              >
-                💾 Değişiklikleri Kaydet
-              </button>
-            )}
           </div>
         </div>
       </header>
@@ -280,20 +350,20 @@ export default function UserProfile() {
       {/* BODY */}
       <div className="pp__body">
         <div className="pp__grid">
-          <aside className="pp__card pp_sidebar">
-            <div className="pp__cardTitle">Hesap Ayarları</div>
+          <aside className="pp__card">
+            <div className="pp__cardHeader">
+              <div className="pp__cardTitle">Hesap Ayarları</div>
+            </div>
             <div className="pp__menu">
               {settingsMenu.map((m) => (
                 <button
                   key={m.id}
-                  className={[
-                    "pp__menuItem",
-                    active === m.id ? "is-active" : "",
-                    m.danger ? "is-danger" : "",
-                  ].join(" ")}
+                  className={`pp__menuItem ${
+                    active === m.id ? "is-active" : ""
+                  } ${m.danger ? "is-danger" : ""}`}
                   onClick={() => {
                     if (m.id === "logout") handleLogout();
-                    else if (m.id === "home") navigate("/anasayfa");
+                    else if (m.link) navigate(m.link);
                     else setActive(m.id);
                   }}
                   type="button"
@@ -305,7 +375,7 @@ export default function UserProfile() {
           </aside>
 
           <main className="pp__main">
-            {/* 1. GENEL BAKIŞ */}
+            {/* GENEL BAKIŞ */}
             {active === "overview" && (
               <section className="pp__card">
                 <div className="pp__cardHeader">
@@ -318,7 +388,7 @@ export default function UserProfile() {
                         <div className="pp__eventImgWrap">
                           <img
                             className="pp__eventImg"
-                            src="https://images.unsplash.com/photo-1501612780327-45045538702b?auto=format&fit=crop&w=1200&q=80"
+                            src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=1200"
                             alt={ev.title}
                           />
                           <span className="pp__tag">
@@ -333,7 +403,7 @@ export default function UserProfile() {
                       </article>
                     ))
                   ) : (
-                    <div className="pp__muted" style={{ padding: "20px" }}>
+                    <div className="pp__muted" style={{ padding: "10px" }}>
                       Henüz favori etkinliğiniz yok.
                     </div>
                   )}
@@ -341,10 +411,12 @@ export default function UserProfile() {
               </section>
             )}
 
-            {/* 2. PROFİL DÜZENLEME */}
+            {/* PROFİL DÜZENLEME */}
             {active === "edit_profile" && (
               <section className="pp__card">
-                <div className="pp__cardTitle">✏️ Profili Düzenle</div>
+                <div className="pp__cardHeader">
+                  <div className="pp__cardTitle">✏️ Profili Düzenle</div>
+                </div>
                 <div className="pp__panel">
                   <div className="pp__panelBlock">
                     <div className="pp__formGrid">
@@ -360,7 +432,7 @@ export default function UserProfile() {
                       />
                       <Field
                         label="E-posta"
-                        defaultValue={userData.email}
+                        defaultValue={safeUser.email}
                         readOnly={true}
                       />
                       <Field
@@ -381,7 +453,7 @@ export default function UserProfile() {
                         }
                       />
                       <Field
-                        label="Telefon Numarası"
+                        label="Telefon"
                         defaultValue={editForm.phone_number}
                         onChange={(e) =>
                           setEditForm({
@@ -391,28 +463,33 @@ export default function UserProfile() {
                         }
                       />
                       <Field
-                        label="Bio"
+                        label="Biyografi"
                         defaultValue={editForm.bio}
                         onChange={(e) =>
                           setEditForm({ ...editForm, bio: e.target.value })
                         }
                       />
                     </div>
-                    <button
-                      className="pp__btn pp__btnPrimary"
-                      type="button"
-                      onClick={() => handleSave()}
-                    >
-                      Kaydet
-                    </button>
+                    <div style={{ marginTop: "20px", textAlign: "right" }}>
+                      <button
+                        className="pp__btn pp__btnPrimary"
+                        type="button"
+                        onClick={handleSave}
+                      >
+                        💾 Kaydet
+                      </button>
+                    </div>
                   </div>
                 </div>
               </section>
             )}
 
+            {/* DİĞER */}
             {active !== "overview" && active !== "edit_profile" && (
               <section className="pp__card">
-                <div className="pp__cardTitle">⚙️ Ayarlar</div>
+                <div className="pp__cardHeader">
+                  <div className="pp__cardTitle">⚙️ Ayarlar</div>
+                </div>
                 <div className="pp__panel">
                   <div className="pp__panelBlock">
                     <p className="pp__muted">
@@ -429,7 +506,6 @@ export default function UserProfile() {
   );
 }
 
-// Helper
 function Field({
   label,
   type = "text",

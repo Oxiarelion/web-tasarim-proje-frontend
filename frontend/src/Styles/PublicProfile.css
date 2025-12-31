@@ -1,0 +1,58 @@
+/* Mevcut UserProfile tasarımlarını aynen kullan */
+@import "./UserProfile.css";
+
+/* --- SADECE BU SAYFAYA ÖZEL EKLEMELER --- */
+
+/* Sekme Butonları Alanı */
+.pp__tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+/* Yorumlar Listesi */
+.pp__commentItem {
+  padding: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background 0.2s;
+}
+
+.pp__commentItem:last-child {
+  border-bottom: none;
+}
+
+.pp__commentItem:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+}
+
+.pp__commentHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.pp__commentEvent {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fbbf24; /* Sarı vurgu */
+}
+
+.pp__commentDate {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.pp__commentText {
+  font-size: 0.95rem;
+  color: rgba(232, 238, 252, 0.9);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* Edit butonlarını gizle (Olur da HTML'de kalırsa diye güvenlik) */
+.pp__avatarOverlay,
+.pp__changeCoverBtn input {
+  display: none !important;
+}

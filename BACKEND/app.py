@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 import os
+import base64  # 🔥 RESİM İŞLEMLERİ İÇİN BU GEREKLİ
 
 # 1. .env DOSYASINI YÜKLE
 load_dotenv()
@@ -14,15 +15,29 @@ from email.message import EmailMessage
 from functools import partial, wraps
 from tortoise import Tortoise, connections
 from models import (
-    User, UserProfile, Event, FavouriteEvent, Feedback,
-    ContactUserTypes, ContactTopicTypes, ContactMessages
+    User, UserProfile, Event, FavouriteEvent, Comment, Feedback,
+    ContactUserTypes, ContactTopicTypes, ContactMessages, University
 )
+import pytz
 
 app = Sanic("Campushub06")
 CORS(app)
 
 # --- GİZLİ ANAHTAR ---
 SECRET_KEY = os.getenv("SECRET_KEY", "bu_cok_gizli_ve_uzun_bir_sifredir_kimse_bilmemeli_12345")
+
+# 🔥 İSTANBUL TIMEZONE (UTC+3) 🔥
+ISTANBUL_TZ = pytz.timezone('Europe/Istanbul')
+
+# 🔥 HELPER FUNCTION: UTC'den İstanbul Saatine Çevir 🔥
+def to_istanbul_tz(dt):
+    """UTC datetime'ı Istanbul timezone'a çevir"""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        # Naive datetime ise UTC olarak kabul et ve timezone ekle
+        dt = timezone.utc.localize(dt) if hasattr(timezone.utc, 'localize') else dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ISTANBUL_TZ)
 
 # 🔥 BASİT RAM ÖNBELLEĞİ (CACHE) 🔥
 # Kullanıcı profillerini burada tutacağız: {user_id: {profil_verisi}}
@@ -94,17 +109,36 @@ async def close_orm(app, loop):
 # Mail helper
 # -------------------------------------------------
 def send_email_sync(email, reset_link):
-    msg = EmailMessage()
-    msg["Subject"] = "CampusHub Ankara - Şifre Sıfırlama"
-    msg["From"] = os.getenv("GMAIL_USER")
-    msg["To"] = email
-    msg.set_content(
-        f"Merhaba,\n\nŞifreni sıfırlamak için: {reset_link}\n\nCampusHub Ekibi"
-    )
+    import sys
+    try:
+        print(f"📧 Gmail User: {os.getenv('GMAIL_USER')}", flush=True, file=sys.stderr)
+        print(f"📧 Email To: {email}", flush=True, file=sys.stderr)
+        
+        msg = EmailMessage()
+        msg["Subject"] = "CampusHub Ankara - Şifre Sıfırlama"
+        msg["From"] = os.getenv("GMAIL_USER")
+        msg["To"] = email
+        msg.set_content(
+            f"Merhaba,\n\nŞifreni sıfırlamak için: {reset_link}\n\nCampusHub Ekibi"
+        )
+        print("📧 Email message created", flush=True, file=sys.stderr)
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(os.getenv("GMAIL_USER"), os.getenv("GMAIL_PASS"))
-        smtp.send_message(msg)
+        print("📧 Connecting to SMTP...", flush=True, file=sys.stderr)
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            print("📧 Connected to SMTP", flush=True, file=sys.stderr)
+            print(f"📧 Logging in with user: {os.getenv('GMAIL_USER')}", flush=True, file=sys.stderr)
+            smtp.login(os.getenv("GMAIL_USER"), os.getenv("GMAIL_PASS"))
+            print("📧 Login successful", flush=True, file=sys.stderr)
+            smtp.send_message(msg)
+            print("📧 Message sent", flush=True, file=sys.stderr)
+        
+        print("✅ Email gönderildi!", flush=True, file=sys.stderr)
+        return True
+    except Exception as e:
+        import traceback
+        print(f"❌ Email Gönderme Hatası: {e}", flush=True, file=sys.stderr)
+        print(f"❌ Full Error: {traceback.format_exc()}", flush=True, file=sys.stderr)
+        return False
 
 
 # -------------------------------------------------
@@ -733,8 +767,274 @@ async def update_profile(request):
         print(f"Profil Güncelleme Hatası: {e}")
         return json({"basarili": False, "mesaj": str(e)}, status=500)
 
+# 🔥 3. FOTOĞRAF GÜNCELLEME (HEM KAPAK HEM PROFİL) 🔥
+@app.post("/api/profil/foto-guncelle")
+@authorized()
+async def foto_guncelle(request):
+    try:
+        user_id = request.ctx.user_id
+        print(f"\n🔥 === foto_guncelle başladı === 🔥")
+        print(f"🔑 User ID: {user_id}")
+        print(f"� request.files: {list(request.files.keys()) if request.files else 'EMPTY'}")
+        
+        # Dosya kontrolü
+        if not request.files or "file" not in request.files:
+            print("❌ Dosya bulunamadı!")
+            return json({"basarili": False, "mesaj": "Dosya seçilmedi."}, status=400)
+
+        file = request.files["file"][0]
+        print(f"✅ Dosya alındı: name={file.name}, size={len(file.body)} bytes")
+        
+        # 🔥 TÜR KONTROLÜ - Query parameter'dan oku
+        foto_type = request.args.get("type", "avatar")
+        print(f"📸 Foto Tipi (URL param): {foto_type}")
+
+        # Dosyayı Base64'e çeviriyoruz
+        base64_img = "data:image/jpeg;base64," + base64.b64encode(file.body).decode('utf-8')
+        print(f"✅ Base64 conversion: {len(base64_img)} bytes")
+
+        # Kullanıcı ve profil kontrolü
+        user = await User.get_or_none(user_id=user_id).prefetch_related("profile")
+        if not user:
+            print(f"❌ User bulunamadı: {user_id}")
+            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
+        if not user.profile:
+            print(f"❌ Profile bulunamadı: user={user.id}")
+            return json({"basarili": False, "mesaj": "Profil bulunamadı."}, status=404)
+
+        # Fotoğrafı güncelle
+        if foto_type == "cover":
+            user.profile.cover_photo = base64_img
+            mesaj = "Kapak fotoğrafı güncellendi."
+            print("✅ Kapak fotoğrafı ayarlandı")
+        else:
+            user.profile.profile_photo = base64_img
+            mesaj = "Profil fotoğrafı güncellendi."
+            print("✅ Profil fotoğrafı ayarlandı")
+            
+        # Veritabanına kaydet
+        await user.profile.save()
+        print(f"✅ Veritabanına kaydedildi!")
+
+        # Cache'i güncelle (veya temizle)
+        if user_id in PROFILE_CACHE:
+            # Cache var ise direkt update et - daha hızlı
+            PROFILE_CACHE[user_id]["profile"]["profile_photo"] = base64_img if foto_type == "avatar" else PROFILE_CACHE[user_id]["profile"].get("profile_photo")
+            PROFILE_CACHE[user_id]["profile"]["cover_photo"] = base64_img if foto_type == "cover" else PROFILE_CACHE[user_id]["profile"].get("cover_photo")
+            print("✅ Cache güncellendi")
+        else:
+            print("ℹ️ Cache'de veri yok (ilk upload)")
+
+        print(f"✅ === foto_guncelle başarıyla tamamlandı === ✅\n")
+        return json({"basarili": True, "mesaj": mesaj, "foto": base64_img, "type": foto_type})
+
+    except Exception as e:
+        print(f"Foto Upload Hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
 # -------------------------------------------------
-# Çalıştır
+# 🔍 KULLANICI ARAMA (GÜNCELLENDİ: Hayalet Kayıtları Gizler)
 # -------------------------------------------------
+@app.get("/api/kullanici-ara")
+@authorized()
+async def kullanici_ara(request):
+    try:
+        q = request.args.get("q", "").strip()
+        
+        if not q or len(q) < 2:
+            return json({"basarili": True, "sonuclar": []})
+        
+        # 🔥 ÖNEMLİ: prefetch_related("user") ekledik.
+        # Bu sayede profille birlikte kullanıcı kaydını da çekiyoruz.
+        profiles = await UserProfile.filter(full_name__icontains=q).prefetch_related("user").limit(5).all()
+        
+        results = []
+        for p in profiles:
+            # 🔥 KONTROL: Eğer kullanıcısı (users tablosundaki karşılığı) silinmişse listeye ekleme!
+            if p.user:
+                results.append({
+                    "user_id": p.user.user_id, # ID'yi user tablosundan alıyoruz, garanti olsun
+                    "full_name": p.full_name,
+                    "profile_photo": p.profile_photo,
+                    "department": p.department,
+                    "grade": p.grade
+                })
+        
+        return json({"basarili": True, "sonuclar": results})
+        
+    except Exception as e:
+        print(f"Arama Hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+# -------------------------------------------------
+# 🌍 HERKESE AÇIK PROFİL GÖRÜNTÜLEME (Public Profile)
+# -------------------------------------------------
+@app.get("/api/public-profile/<target_id:int>")
+@authorized()
+async def get_public_profile(request, target_id):
+    try:
+        # 1. Kullanıcıyı ve Profilini Bul
+        user = await User.get_or_none(user_id=target_id).prefetch_related("profile")
+        if not user:
+            return json({"basarili": False, "mesaj": "Veritabanında bu ID'ye sahip kullanıcı yok."}, status=404)
+
+        if not user.profile:
+            # Profil yoksa bile hata vermesin, boş göstersin
+            return json({"basarili": False, "mesaj": "Bu kullanıcının profili henüz oluşturulmamış."}, status=404)
+
+        # 2. Katıldığı Etkinlikleri Çek
+        fav_rows = await FavouriteEvent.filter(user_id=target_id).prefetch_related("event", "event__university").all()
+        katildigi_etkinlikler = []
+        for fav in fav_rows:
+            e = fav.event
+            if e:
+                katildigi_etkinlikler.append({
+                    "id": e.event_id,
+                    "title": e.title,
+                    "university": e.university.name if e.university else "Genel",
+                    "date": e.start_datetime.strftime("%Y-%m-%d") if e.start_datetime else None,
+                })
+
+        # 3. Yaptığı Yorumları Çek
+        comments = await Comment.filter(user_id=target_id).prefetch_related("event").order_by("-created_at").all()
+        yorumlar = []
+        for c in comments:
+            yorumlar.append({
+                "id": c.comment_id,
+                "event_title": c.event.title if c.event else "Bilinmeyen Etkinlik",
+                "message": c.message,
+                "rating": c.rating,
+                "date": c.created_at.strftime("%d.%m.%Y")
+            })
+
+        return json({
+            "basarili": True,
+            "profile": {
+                "full_name": user.profile.full_name,
+                "bio": user.profile.bio,
+                "department": user.profile.department,
+                "grade": user.profile.grade,
+                "profile_photo": user.profile.profile_photo,
+                "cover_photo": user.profile.cover_photo,
+                "email": user.email 
+            },
+            "events": katildigi_etkinlikler,
+            "comments": yorumlar
+        })
+
+    except Exception as e:
+        print(f"Public Profil Hatası: {e}")
+        return json({"basarili": False, "mesaj": f"Sunucu hatası: {str(e)}"}, status=500)
+    # -------------------------------------------------
+# 🎫 TEK ETKİNLİK DETAYI ve YORUMLARI
+# -------------------------------------------------
+@app.get("/api/etkinlik/<event_id:int>")
+@authorized()
+async def get_event_detail(request, event_id):
+    try:
+        # 1. Etkinliği Bul
+        event = await Event.get_or_none(event_id=event_id).prefetch_related("university")
+        if not event:
+            return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
+
+        # 2. Bu Etkinliğe Yapılan Yorumları Bul
+        # Comment tablosundan bu event_id'ye ait olanları çekiyoruz
+        comments = await Comment.filter(event_id=event_id).prefetch_related("user", "user__profile").order_by("-created_at").all()
+        
+        comment_list = []
+        for c in comments:
+            # Yorum yapanın profil bilgilerini al (Avatar ve İsim için)
+            user_profile = c.user.profile if c.user and c.user.profile else None
+            
+            comment_list.append({
+                "id": c.comment_id,
+                "user_id": c.user.user_id,
+                "user_name": user_profile.full_name if user_profile else c.user.email,
+                "user_photo": user_profile.profile_photo if user_profile else None,
+                "message": c.message,
+                "date": to_istanbul_tz(c.created_at).strftime("%d.%m.%Y %H:%M")
+            })
+
+        # 3. Veriyi Gönder
+        return json({
+            "basarili": True,
+            "etkinlik": {
+                "id": event.event_id,
+                "title": event.title,
+                "description": event.description,
+                "location": event.location,
+                "date": event.start_datetime.strftime("%Y-%m-%d"),
+                "time": event.start_datetime.strftime("%H:%M"),
+                "university": event.university.name if event.university else "Genel",
+                "university_logo": event.university.logo_url if event.university else None
+            },
+            "yorumlar": comment_list
+        })
+
+    except Exception as e:
+        print(f"Etkinlik Detay Hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+# -------------------------------------------------
+# 💬 YORUM EKLEME (YENİ ENDPOINT)
+# -------------------------------------------------
+@app.post("/api/etkinlik/<event_id:int>/yorum")
+@authorized()
+async def add_comment(request, event_id):
+    try:
+        user_id = request.ctx.user_id
+        
+        # Request body'den message'ı al
+        body = request.json or {}
+        message = body.get("message", "").strip()
+        rating = body.get("rating")
+        
+        # Validasyon
+        if not message:
+            return json({"basarili": False, "mesaj": "Yorum boş olamaz."}, status=400)
+        
+        if len(message) > 1000:
+            return json({"basarili": False, "mesaj": "Yorum 1000 karakterden kısa olmalı."}, status=400)
+        
+        # Etkinliği kontrol et
+        event = await Event.get_or_none(event_id=event_id)
+        if not event:
+            return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
+        
+        # Kullanıcıyı kontrol et
+        user = await User.get_or_none(user_id=user_id).prefetch_related("profile")
+        if not user:
+            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
+        
+        # Yorum oluştur
+        comment = await Comment.create(
+            user_id=user_id,
+            event_id=event_id,
+            message=message,
+            rating=rating if rating and 1 <= rating <= 5 else None
+        )
+        
+        # Response olarak yeni yorum'u döndür
+        user_profile = user.profile if user.profile else None
+        
+        return json({
+            "basarili": True,
+            "mesaj": "Yorum başarıyla eklendi.",
+            "yorum": {
+                "id": comment.comment_id,
+                "user_id": user.user_id,
+                "user_name": user_profile.full_name if user_profile else user.email,
+                "user_photo": user_profile.profile_photo if user_profile else None,
+                "message": comment.message,
+                "rating": comment.rating,
+                "date": to_istanbul_tz(comment.created_at).strftime("%d.%m.%Y %H:%M"),
+                "created_at": to_istanbul_tz(comment.created_at).isoformat()
+            }
+        })
+        
+    except Exception as e:
+        print(f"Yorum Ekleme Hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=8000)

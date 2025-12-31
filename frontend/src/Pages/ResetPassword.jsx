@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import "../Styles/LoginPage.css"; // Senin güzel tasarımını kullanır
+import "../Styles/LoginPage.css"; // Uses your existing Login styles for consistency
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get("token"); // Linkteki şifreyi alır
+  const token = searchParams.get("token"); // Gets the token from the URL
 
   const [password, setPassword] = useState("");
   const [mesaj, setMesaj] = useState("");
@@ -39,7 +39,7 @@ const ResetPassword = () => {
 
   return (
     <div className="login-page-container">
-      {/* Video Arka Plan */}
+      {/* Video Background */}
       <div className="video-background">
         <video src="/video.mp4" autoPlay loop muted playsInline />
         <div className="video-overlay"></div>
@@ -100,6 +100,17 @@ const ResetPassword = () => {
               className={`message-box ${
                 mesaj.includes("✅") ? "success" : "error"
               }`}
+              style={{
+                marginTop: "10px",
+                padding: "10px",
+                borderRadius: "5px",
+                backgroundColor: mesaj.includes("✅")
+                  ? "rgba(0, 255, 0, 0.2)"
+                  : "rgba(255, 0, 0, 0.2)",
+                color: "white",
+                textAlign: "center",
+                fontSize: "0.9rem",
+              }}
             >
               {mesaj}
             </div>

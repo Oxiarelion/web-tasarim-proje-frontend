@@ -75,7 +75,22 @@ class FavouriteEvent(models.Model):
     class Meta:
         table = "favourite_events"
 
-# 5. Geri Bildirimler
+# 5. Etkinlik Yorumları (YENI - Feedback'in yerine)
+class Comment(models.Model):
+    comment_id = fields.IntField(pk=True)
+    user = fields.ForeignKeyField("models.User", related_name="comments", source_field="user_id")
+    event = fields.ForeignKeyField("models.Event", related_name="comments", source_field="event_id")
+    
+    message = fields.TextField()
+    rating = fields.IntField(null=True)  # 1-5 yıldız
+    
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+    
+    class Meta:
+        table = "comments"
+
+# 6. Geri Bildirimler
 class Feedback(models.Model):
     feedback_id = fields.IntField(pk=True)
     user = fields.ForeignKeyField("models.User", related_name="feedbacks", source_field="user_id")
