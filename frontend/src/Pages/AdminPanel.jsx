@@ -44,6 +44,11 @@ const AdminPanel = () => {
     logo_url: ""
   });
 
+  // Reply Modal States
+  const [showReplyModal, setShowReplyModal] = useState(false);
+  const [selectedFeedback, setSelectedFeedback] = useState(null);
+  const [replyMessage, setReplyMessage] = useState("");
+
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
@@ -475,6 +480,42 @@ const AdminPanel = () => {
     }
   };
 
+  // Feedback Yanıtlama İşlemleri
+  const openReplyModal = (feedback) => {
+    setSelectedFeedback(feedback);
+    setReplyMessage("");
+    setShowReplyModal(true);
+  };
+
+  const handleReplySubmit = async () => {
+    if (!replyMessage.trim()) {
+      setMesaj("❌ Yanıt mesajı boş olamaz");
+      return;
+    }
+
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/admin/feedbacks/${selectedFeedback.feedback_id}/reply`, {
+        method: "POST",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ message: replyMessage })
+      });
+      const data = await res.json();
+      
+      if (data.basarili) {
+        setMesaj("✅ Yanıt başarıyla gönderildi");
+        setShowReplyModal(false);
+        fetchFeedbacks();
+      } else {
+        setMesaj(`❌ ${data.mesaj}`);
+      }
+    } catch (err) {
+      setMesaj("❌ Yanıt gönderme başarısız");
+    }
+  };
+
   const handleLogout = () => {
     localStorage.clear();
     navigate("/", { replace: true });
@@ -832,6 +873,7 @@ const AdminPanel = () => {
                         <th>Mesaj</th>
                         <th>Durum</th>
                         <th>Tarih</th>
+                        <th>İşlemler</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -850,6 +892,17 @@ const AdminPanel = () => {
                           </td>
                           <td>
                             {f.created_at ? new Date(f.created_at).toLocaleDateString("tr-TR") : "—"}
+                          </td>
+                          <td className="action-buttons">
+                            {f.status === "pending" && (
+                              <button 
+                                className="btn-edit" 
+                                onClick={() => openReplyModal(f)}
+                                title="Yanıtla"
+                              >
+                                ✉️
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1169,6 +1222,40 @@ const AdminPanel = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* FEEDBACK YANITLAMA MODALI */}
+      {showReplyModal && selectedFeedback && (
+        <div className="modal-overlay" onClick={() => setShowReplyModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>✉️ Feedback Yanıtla</h2>
+            <div style={{marginBottom: "1rem", padding: "10px", background: "rgba(255,255,255,0.05)", borderRadius: "8px"}}>
+              <p><strong>Kullanıcı:</strong> {selectedFeedback.user_full_name || selectedFeedback.user_email}</p>
+              <p><strong>Konu:</strong> {selectedFeedback.title || "Başlıksız"}</p>
+              <p><strong>Mesaj:</strong> {selectedFeedback.message}</p>
+            </div>
+            
+            <label>
+              Yanıtınız:
+              <textarea
+                value={replyMessage}
+                onChange={(e) => setReplyMessage(e.target.value)}
+                placeholder="Kullanıcıya gönderilecek yanıtı yazın..."
+                rows="5"
+                style={{width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.2)", background: "rgba(0,0,0,0.2)", color: "white", marginTop: "5px"}}
+              />
+            </label>
+            
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={() => setShowReplyModal(false)}>
+                İptal
+              </button>
+              <button className="btn-confirm" onClick={handleReplySubmit}>
+                Gönder
+              </button>
+            </div>
           </div>
         </div>
       )}

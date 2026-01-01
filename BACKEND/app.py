@@ -113,31 +113,43 @@ def admin_required():
     def decorator(f):
         @wraps(f)
         async def decorated_function(request, *args, **kwargs):
+            print(f"🔐 AUTH CHECK for {request.path}")
             # Önce token kontrolü yap
             token = None
             if "Authorization" in request.headers:
                 try:
                     token = request.headers["Authorization"].split(" ")[1]
                 except IndexError:
+                    print("🔐 Token format error")
                     return json({"basarili": False, "mesaj": "Token formatı hatalı."}, status=401)
             
             if not token:
+                print("🔐 No token found")
                 return json({"basarili": False, "mesaj": "Token bulunamadı. Giriş yapmalısınız."}, status=401)
 
             try:
                 payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
                 user_id = payload["user_id"]
                 request.ctx.user_id = user_id
+                print(f"🔐 Token decoded, user_id: {user_id}")
                 
                 # Kullanıcının admin olup olmadığını kontrol et
                 user = await User.get_or_none(user_id=user_id)
                 if not user or not user.is_admin:
+                    print(f"🔐 User {user_id} NOT ADMIN")
                     return json({"basarili": False, "mesaj": "Bu işlem için yönetici yetkisi gerekiyor."}, status=403)
+                
+                print(f"🔐 User {user_id} authorized")
                     
             except jwt.ExpiredSignatureError:
+                print("🔐 Token expired")
                 return json({"basarili": False, "mesaj": "Oturum süresi doldu. Tekrar giriş yapın."}, status=401)
             except jwt.InvalidTokenError:
+                print("🔐 Token invalid")
                 return json({"basarili": False, "mesaj": "Geçersiz token."}, status=401)
+            except Exception as e:
+                print(f"🔐 Auth error: {e}")
+                return json({"basarili": False, "mesaj": str(e)}, status=500)
 
             return await f(request, *args, **kwargs)
         return decorated_function
@@ -619,38 +631,45 @@ async def get_single_faq(request, faq_id):
 @app.post("/api/feedback")
 @authorized()
 async def create_feedback(request):
-    data = request.json or {}
-    user_id = request.ctx.user_id
+    try:
+        data = request.json or {}
+        user_id = request.ctx.user_id
 
-    event_id = data.get("event_id")  # Artık opsiyonel
-    fb_type = (data.get("type") or "").strip() or None
-    title = (data.get("title") or "").strip() or None
-    message = (data.get("message") or "").strip()
+        event_id = data.get("event_id")  # Artık opsiyonel
+        fb_type = (data.get("type") or "").strip() or None
+        title = (data.get("title") or "").strip() or None
+        message = (data.get("message") or "").strip()
 
-    if not message:
-        return json({"basarili": False, "mesaj": "Mesaj alanı zorunludur."}, status=400)
+        if not message:
+            return json({"basarili": False, "mesaj": "Mesaj alanı zorunludur."}, status=400)
 
-    user = await User.get_or_none(user_id=user_id)
-    if not user:
-        return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
+        user = await User.get_or_none(user_id=user_id)
+        if not user:
+            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
 
-    # Etkinlik kontrolü (sadece event_id varsa)
-    event = None
-    if event_id:
-        event = await Event.get_or_none(event_id=event_id)
-        if not event:
-            return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
+        # Etkinlik kontrolü (sadece event_id varsa)
+        event = None
+        if event_id:
+            event = await Event.get_or_none(event_id=event_id)
+            if not event:
+                return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
 
-    fb = await Feedback.create(
-        user=user,
-        event=event,  # None olabilir (genel feedback için)
-        type=fb_type,
-        title=title,
-        message=message,
-        status="pending"
-    )
+        fb = await Feedback.create(
+            user=user,
+            event=event,  # None olabilir (genel feedback için)
+            type=fb_type,
+            title=title,
+            message=message,
+            status="pending"
+        )
 
-    return json({"basarili": True, "mesaj": "Geri bildiriminiz alındı. Teşekkür ederiz.", "feedback_id": fb.feedback_id}, status=201)
+        return json({"basarili": True, "mesaj": "Geri bildiriminiz alındı. Teşekkür ederiz.", "feedback_id": fb.feedback_id}, status=201)
+    
+    except Exception as e:
+        print(f"❌ Feedback Hatası: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return json({"basarili": False, "mesaj": f"Sunucu hatası: {str(e)}"}, status=500)
 
 
 
@@ -1674,31 +1693,7 @@ async def admin_delete_message(request, contact_id):
 # 🔥 ADMIN PANELİ - FEEDBACK YÖNETİMİ
 # -------------------------------------------------
 
-# Tüm feedbackleri listele
-@app.get("/api/admin/feedbacks")
-@admin_required()
-async def admin_list_feedbacks(request):
-    """Tüm feedbackleri listele"""
-    try:
-        feedbacks = await Feedback.all().prefetch_related("user", "event").order_by("-created_at")
-        
-        feedbacks_list = []
-        for fb in feedbacks:
-            feedbacks_list.append({
-                "feedback_id": fb.feedback_id,
-                "user_email": fb.user.email if fb.user else None,
-                "event_title": fb.event.title if fb.event else None,
-                "type": fb.type,
-                "title": fb.title,
-                "message": fb.message,
-                "status": fb.status,
-                "created_at": fb.created_at.isoformat() if fb.created_at else None,
-            })
-        
-        return json({"basarili": True, "count": len(feedbacks_list), "feedbacks": feedbacks_list})
-    except Exception as e:
-        print(f"Feedback listeleme hatası: {e}")
-        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
 
 
 # Feedback durumu güncelle
@@ -1849,9 +1844,123 @@ async def admin_delete_university(request, university_id):
 
 
 
-# -------------------------------------------------
-# 🔥 KULLANICI BAN/UNBAN İŞLEMLERİ
-# -------------------------------------------------
+# Admin Feedbacks Listele
+@app.get("/api/admin/feedbacks")
+@admin_required()
+async def admin_list_feedbacks(request):
+    """Tüm feedbackleri listele"""
+    print("📢 API: /api/admin/feedbacks endpoint hit! (RAW SQL MODE)")
+    try:
+        # ORM yerine RAW SQL kullanımı (Debug için)
+        conn = Tortoise.get_connection("default")
+        sql = """
+            SELECT 
+                f.feedback_id, f.type, f.title, f.message, f.status, f.created_at,
+                u.email as user_email,
+                up.full_name as user_full_name,
+                e.title as event_title
+            FROM feedbacks f
+            LEFT JOIN users u ON f.user_id = u.user_id
+            LEFT JOIN user_profiles up ON u.user_id = up.user_id
+            LEFT JOIN events e ON f.event_id = e.event_id
+            ORDER BY f.created_at DESC
+        """
+        
+        # execute_query_dict returns list of dicts
+        feedbacks = await conn.execute_query_dict(sql)
+        print(f"📢 RAW SQL: Found {len(feedbacks)} items in DB.")
+        
+        result = []
+        for row in feedbacks:
+            result.append({
+                "feedback_id": row.get("feedback_id"),
+                "user_email": row.get("user_email") or "Anonim",
+                "user_full_name": row.get("user_full_name"),
+                "event_title": row.get("event_title") or "Genel",
+                "type": row.get("type"),
+                "title": row.get("title"),
+                "message": row.get("message"),
+                "status": row.get("status"),
+                "created_at": row.get("created_at").isoformat() if row.get("created_at") else None
+            })
+            
+        return json({"basarili": True, "feedbacks": result})
+    except Exception as e:
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Admin Feedback Yanıtla
+@app.post("/api/admin/feedbacks/<feedback_id:int>/reply")
+@admin_required()
+async def admin_reply_feedback(request, feedback_id):
+    try:
+        # User ve Profile'ı birlikte çekelim ki full_name'e erişirken hata almayalım
+        feedback = await Feedback.get_or_none(feedback_id=feedback_id).prefetch_related("user__profile")
+        if not feedback:
+            return json({"basarili": False, "mesaj": "Feedback bulunamadı."}, status=404)
+        
+        data = request.json or {}
+        reply_message = data.get("message", "").strip()
+        
+        if not reply_message:
+            return json({"basarili": False, "mesaj": "Yanıt mesajı boş olamaz."}, status=400)
+            
+        # Kullanıcının emaili
+        user_email = feedback.user.email if feedback.user else None
+        if not user_email:
+             return json({"basarili": False, "mesaj": "Kullanıcı emaili bulunamadı (Anonim?)."}, status=400)
+
+        # 🔥 EMAIL GÖNDERME (GERÇEK)
+        try:
+            gmail_user = os.getenv("GMAIL_USER")
+            gmail_pass = os.getenv("GMAIL_PASS")
+            
+            if gmail_user and gmail_pass:
+                msg = EmailMessage()
+                msg["Subject"] = f"Geri Bildirim Yanıtı: {feedback.title or 'Konusuz'}"
+                msg["From"] = gmail_user
+                msg["To"] = user_email
+                
+                body = f"""
+                Merhaba {feedback.user.profile.full_name if feedback.user and hasattr(feedback.user, 'profile') else 'Kullanıcı'},
+                
+                Geri bildiriminiz için teşekkür ederiz.
+                
+                Konu: {feedback.title}
+                Mesajınız: {feedback.message}
+                
+                ------------------------------------------------------------------
+                YANITIMIZ:
+                {reply_message}
+                ------------------------------------------------------------------
+                
+                İyi günler dileriz,
+                CampusHub Yönetimi
+                """
+                msg.set_content(body)
+                
+                # SMTP Bağlantısı (TLS 587)
+                with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+                    smtp.starttls()
+                    smtp.login(gmail_user, gmail_pass)
+                    smtp.send_message(msg)
+                
+                print(f"✅ Email sent to {user_email}")
+            else:
+                return json({"basarili": False, "mesaj": "Sunucu email ayarları eksik (.env)."}, status=500)
+
+        except Exception as e:
+            print(f"❌ Email sending failed: {e}")
+            return json({"basarili": False, "mesaj": f"Email gönderilemedi: {str(e)}"}, status=500)
+        
+        # Durumu güncelle
+        feedback.status = "resolved"
+        await feedback.save()
+        
+        return json({"basarili": True, "mesaj": "Yanıt gönderildi ve durum güncellendi."})
+    except Exception as e:
+        print(f"❌ Yanıt hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
 
 # Kullanıcıyı banla
 @app.post("/api/admin/users/<user_id:int>/ban")
