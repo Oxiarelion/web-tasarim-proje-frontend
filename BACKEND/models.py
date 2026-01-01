@@ -56,6 +56,8 @@ class Event(models.Model):
     description = fields.TextField(null=True)
     location = fields.CharField(max_length=255, null=True)
     image_url = fields.TextField(null=True)  # 🔥 Etkinlik fotoğrafı (base64 veya URL)
+    category = fields.CharField(max_length=100, null=True)  # 🔥 Kategori alanı
+    club = fields.CharField(max_length=255, null=True)  # 🔥 Kulüp alanı
     
     start_datetime = fields.DatetimeField(null=True)
     end_datetime = fields.DatetimeField(null=True)

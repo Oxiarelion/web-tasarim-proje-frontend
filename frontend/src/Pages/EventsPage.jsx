@@ -331,7 +331,22 @@ const EventsPage = () => {
                         <span className="kutu-ay">{ayAdi}</span>
                       </div>
                       <div style={{ flex: 1 }}>
-                        <h3 className="kutu-baslik">{etkinlik.title}</h3>
+                        <h3 className="kutu-baslik">
+                          {etkinlik.title}
+                          {etkinlik.end_datetime && new Date(etkinlik.end_datetime) < new Date() && (
+                            <span style={{
+                              marginLeft: "10px",
+                              padding: "4px 8px",
+                              fontSize: "0.75rem",
+                              fontWeight: "bold",
+                              color: "#fff",
+                              background: "#6b7280",
+                              borderRadius: "6px"
+                            }}>
+                              Süresi Geçti
+                            </span>
+                          )}
+                        </h3>
                         {etkinlik.university && (
                           <span className="kutu-uni">
                             {etkinlik.university}

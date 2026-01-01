@@ -30,6 +30,8 @@ const AdminPanel = () => {
   const [eventForm, setEventForm] = useState({
     title: "",
     description: "",
+    category: "",
+    club: "",
     location: "",
     university_id: "",
     start_datetime: "",
@@ -109,6 +111,11 @@ const AdminPanel = () => {
       });
       const data = await res.json();
       if (data.basarili) {
+        // 🔥 DEBUG: İlk 3 kullanıcıyı konsola yazdır
+        console.log("📋 Backend'den gelen ilk 3 kullanıcı:");
+        data.users.slice(0, 3).forEach((u, i) => {
+          console.log(`  ${i + 1}. ${u.email} - Admin: ${u.is_admin}`);
+        });
         setUsers(data.users);
       }
     } catch (err) {
@@ -253,13 +260,28 @@ const AdminPanel = () => {
         
         if (data.basarili) {
           setSelectedEvent(data.event);
+          
+          // Tarih formatını datetime-local için dönüştür (YYYY-MM-DDTHH:MM)
+          const formatDatetimeLocal = (isoString) => {
+            if (!isoString) return "";
+            const date = new Date(isoString);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+          };
+          
           setEventForm({
             title: data.event.title || "",
             description: data.event.description || "",
+            category: data.event.category || "",
+            club: data.event.club || "",
             location: data.event.location || "",
             university_id: data.event.university_id || "",
-            start_datetime: data.event.start_datetime || "",
-            end_datetime: data.event.end_datetime || "",
+            start_datetime: formatDatetimeLocal(data.event.start_datetime),
+            end_datetime: formatDatetimeLocal(data.event.end_datetime),
             image_url: data.event.image_url || "",
             max_participants: data.event.max_participants || "",
             is_active: data.event.is_active
@@ -274,6 +296,8 @@ const AdminPanel = () => {
       setEventForm({
         title: "",
         description: "",
+        category: "",
+        club: "",
         location: "",
         university_id: "",
         start_datetime: "",
@@ -763,6 +787,8 @@ const AdminPanel = () => {
                         <th>ID</th>
                         <th>Fotoğraf</th>
                         <th>Başlık</th>
+                        <th>Kategori</th>
+                        <th>Kulüp</th>
                         <th>Üniversite</th>
                         <th>Lokasyon</th>
                         <th>Başlangıç</th>
@@ -783,6 +809,8 @@ const AdminPanel = () => {
                             )}
                           </td>
                           <td>{e.title}</td>
+                          <td>{e.category || "—"}</td>
+                          <td>{e.club || "—"}</td>
                           <td>{e.university || "—"}</td>
                           <td>{e.location || "—"}</td>
                           <td>
@@ -790,8 +818,14 @@ const AdminPanel = () => {
                           </td>
                           <td>{e.max_participants || "—"}</td>
                           <td>
-                            <span className={`badge ${e.is_active ? "active" : "inactive"}`}>
-                              {e.is_active ? "Aktif" : "Pasif"}
+                            <span className={`badge ${
+                              e.end_datetime && new Date(e.end_datetime) < new Date() 
+                                ? "inactive" 
+                                : e.is_active ? "active" : "inactive"
+                            }`}>
+                              {e.end_datetime && new Date(e.end_datetime) < new Date()
+                                ? "Süresi Geçti"
+                                : e.is_active ? "Aktif" : "Bakımda"}
                             </span>
                           </td>
                           <td className="action-buttons">
@@ -1042,6 +1076,33 @@ const AdminPanel = () => {
                   rows="4"
                 />
               </label>
+
+              <label>
+                Kategori:
+                <select
+                  value={eventForm.category}
+                  onChange={(e) => setEventForm({...eventForm, category: e.target.value})}
+                >
+                  <option value="">Seçiniz</option>
+                  <option value="Seminer">Seminer</option>
+                  <option value="Sosyal">Sosyal</option>
+                  <option value="Yarışma">Yarışma</option>
+                  <option value="Kültür">Kültür</option>
+                  <option value="Spor">Spor</option>
+                  <option value="Akademik">Akademik</option>
+                  <option value="Diğer">Diğer</option>
+                </select>
+              </label>
+              
+              <label>
+                Kulüp:
+                <input
+                  type="text"
+                  value={eventForm.club}
+                  onChange={(e) => setEventForm({...eventForm, club: e.target.value})}
+                  placeholder="Örn: Bilgisayar Kulübü"
+                />
+              </label>
               
               <label>
                 Lokasyon:
@@ -1113,10 +1174,10 @@ const AdminPanel = () => {
               <label className="checkbox-label">
                 <input
                   type="checkbox"
-                  checked={eventForm.is_active}
-                  onChange={(e) => setEventForm({...eventForm, is_active: e.target.checked})}
+                  checked={!eventForm.is_active}
+                  onChange={(e) => setEventForm({...eventForm, is_active: !e.target.checked})}
                 />
-                Aktif
+                Bakımda
               </label>
               
               <div className="modal-actions">

@@ -1,0 +1,158 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0 -- c:\Users\mahir\OneDrive\Masaüstü\web-tasarim-proje-frontend\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\mahir\OneDrive\Masaüstü\web-tasarim-proje-frontend\BACKEND
+configfile: pytest.ini
+plugins: anyio-4.12.0, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+test_user_register.py::test_kayit_ol_basarili FAILED                     [ 50%]
+test_user_register.py::test_kayit_ol_eksik_bilgi FAILED                  [100%]
+
+================================== FAILURES ===================================
+___________________________ test_kayit_ol_basarili ____________________________
+
+test_client = <httpx.AsyncClient object at 0x000001A3C6324C20>
+
+    @pytest.mark.asyncio
+    async def test_kayit_ol_basarili(test_client):
+        """Yeni bir kullanýcý için kayýt olma sürecini test et"""
+    
+        unique_email = f"test_{uuid.uuid4()}@ankara.edu.tr"
+        payload = {
+            "email": unique_email,
+            "name": "Test Kullanici",
+            "password": "sifre123"
+        }
+    
+        # API'ye POST isteði at
+>       response = await test_client.post("/api/kayit-ol", json=payload)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test_user_register.py:20: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+..\.venv\Lib\site-packages\httpx\_client.py:1859: in post
+    return await self.request(
+..\.venv\Lib\site-packages\httpx\_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\httpx\_client.py:1629: in send
+    response = await self._send_handling_auth(
+..\.venv\Lib\site-packages\httpx\_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+..\.venv\Lib\site-packages\httpx\_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\httpx\_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\httpx\_transports\asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+..\.venv\Lib\site-packages\sanic\app.py:1943: in __call__
+    self._asgi_app = await ASGIApp.create(self, scope, receive, send)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\sanic\asgi.py:128: in create
+    instance.transport.loop = sanic_app.loop
+                              ^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = Sanic(name="Campushub06")
+
+    @property
+    def loop(self) -> AbstractEventLoop:
+        """Synonymous with asyncio.get_event_loop().
+    
+        .. note::
+            Only supported when using the `app.run` method.
+    
+        Returns:
+            AbstractEventLoop: The event loop for the application.
+    
+        Raises:
+            SanicException: If the application is not running.
+        """
+        if self.state.stage is ServerStage.STOPPED and self.asgi is False:
+>           raise SanicException(
+                "Loop can only be retrieved after the app has started "
+                "running. Not supported with `create_server` function"
+            )
+E           sanic.exceptions.SanicException: Loop can only be retrieved after the app has started running. Not supported with `create_server` function
+
+..\.venv\Lib\site-packages\sanic\app.py:414: SanicException
+__________________________ test_kayit_ol_eksik_bilgi __________________________
+
+test_client = <httpx.AsyncClient object at 0x000001A3C632A350>
+
+    @pytest.mark.asyncio
+    async def test_kayit_ol_eksik_bilgi(test_client):
+        """Eksik bilgi gönderildiðinde 400 hatasý almalýyýz"""
+    
+        payload = {
+            "email": "eksik@ankara.edu.tr"
+            # name ve password bilerek gönderilmedi
+        }
+    
+>       response = await test_client.post("/api/kayit-ol", json=payload)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test_user_register.py:40: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+..\.venv\Lib\site-packages\httpx\_client.py:1859: in post
+    return await self.request(
+..\.venv\Lib\site-packages\httpx\_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\httpx\_client.py:1629: in send
+    response = await self._send_handling_auth(
+..\.venv\Lib\site-packages\httpx\_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+..\.venv\Lib\site-packages\httpx\_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\httpx\_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\httpx\_transports\asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+..\.venv\Lib\site-packages\sanic\app.py:1943: in __call__
+    self._asgi_app = await ASGIApp.create(self, scope, receive, send)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\sanic\asgi.py:128: in create
+    instance.transport.loop = sanic_app.loop
+                              ^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = Sanic(name="Campushub06")
+
+    @property
+    def loop(self) -> AbstractEventLoop:
+        """Synonymous with asyncio.get_event_loop().
+    
+        .. note::
+            Only supported when using the `app.run` method.
+    
+        Returns:
+            AbstractEventLoop: The event loop for the application.
+    
+        Raises:
+            SanicException: If the application is not running.
+        """
+        if self.state.stage is ServerStage.STOPPED and self.asgi is False:
+>           raise SanicException(
+                "Loop can only be retrieved after the app has started "
+                "running. Not supported with `create_server` function"
+            )
+E           sanic.exceptions.SanicException: Loop can only be retrieved after the app has started running. Not supported with `create_server` function
+
+..\.venv\Lib\site-packages\sanic\app.py:414: SanicException
+============================== warnings summary ===============================
+..\.venv\Lib\site-packages\tortoise\fields\data.py:85: 10 warnings
+  c:\Users\mahir\OneDrive\Masaüstü\web-tasarim-proje-frontend\.venv\Lib\site-packages\tortoise\fields\data.py:85: DeprecationWarning: `pk` is deprecated, please use `primary_key` instead
+    super().__init__(primary_key=primary_key, **kwargs)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED test_user_register.py::test_kayit_ol_basarili - sanic.exceptions.Sanic...
+FAILED test_user_register.py::test_kayit_ol_eksik_bilgi - sanic.exceptions.Sa...
+======================= 2 failed, 10 warnings in 0.28s ========================

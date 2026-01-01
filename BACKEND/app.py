@@ -34,8 +34,8 @@ ISTANBUL_TZ = pytz.timezone('Europe/Istanbul')
 def to_istanbul_tz(dt):
     """Datetime'ı Istanbul timezone'a çevir
     
-    Tortoise ORM timezone='UTC' ve use_tz=True ile çalışıyor, 
-    bu yüzden datetime'lar UTC timezone-aware olarak dönüyor.
+        Tortoise ORM timezone='UTC' ve use_tz=True ile çalışıyor, 
+        bu yüzden datetime'lar UTC timezone-aware olarak dönüyor.
     """
     if dt is None:
         return None
@@ -485,6 +485,7 @@ async def etkinlikler(request):
         etkinlikler_list = []
         for r in rows:
             sd = r["start_datetime"]
+            ed = r["end_datetime"]
             etkinlikler_list.append({
                 "id": r["id"],
                 "title": r["title"],
@@ -493,6 +494,7 @@ async def etkinlikler(request):
                 "description": r["description"],
                 "date": sd.strftime("%Y-%m-%d") if sd else None,
                 "time": sd.strftime("%H:%M") if sd else None,
+                "end_datetime": ed.isoformat() if ed else None,  # 🔥 Bitiş zamanı eklendi
             })
 
         return json({"basarili": True, "adet": len(etkinlikler_list), "etkinlikler": etkinlikler_list})
@@ -1173,7 +1175,9 @@ async def get_event_detail(request, event_id):
                 "time": event.start_datetime.strftime("%H:%M"),
                 "university": event.university.name if event.university else "Genel",
                 "university_logo": event.university.logo_url if event.university else None,
-                "image_url": event.image_url  # 🔥 Etkinlik fotoğrafı
+                "image_url": event.image_url,  # 🔥 Etkinlik fotoğrafı
+                "category": event.category,  # 🔥 Kategori
+                "club": event.club  # 🔥 Kulüp
             },
             "yorumlar": comment_list
         })
@@ -1339,6 +1343,22 @@ async def admin_list_users(request):
         
         if cleared_count > 0:
             print(f"📊 Admin panel: {cleared_count} kullanıcının süresi geçmiş banı temizlendi")
+        
+        # 🔥 Admin ve normal kullanıcıları ayır, sonra birleştir
+        admin_users = [u for u in users_list if u["is_admin"]]
+        regular_users = [u for u in users_list if not u["is_admin"]]
+        
+        # Her grubu kendi içinde kayıt tarihine göre sırala (en yeni üstte)
+        admin_users.sort(key=lambda x: x["created_at"] or "", reverse=True)
+        regular_users.sort(key=lambda x: x["created_at"] or "", reverse=True)
+        
+        # Önce admin kullanıcılar, sonra normal kullanıcılar
+        users_list = admin_users + regular_users
+        
+        # 🔥 DEBUG: İlk 3 kullanıcıyı logla
+        print("📋 İlk 3 kullanıcı sıralaması:")
+        for i, u in enumerate(users_list[:3], 1):
+            print(f"  {i}. {u['email']} - Admin: {u['is_admin']}")
         
         return json({"basarili": True, "count": len(users_list), "users": users_list})
     except Exception as e:
@@ -1514,6 +1534,8 @@ async def admin_list_events(request):
                 "event_id": event.event_id,
                 "title": event.title,
                 "description": event.description,
+                "category": event.category,  # 🔥 Kategori
+                "club": event.club,  # 🔥 Kulüp
                 "location": event.location,
                 "university": event.university.name if event.university else None,
                 "start_datetime": event.start_datetime.isoformat() if event.start_datetime else None,
@@ -1546,6 +1568,8 @@ async def admin_create_event(request):
         end_datetime = data.get("end_datetime")
         image_url = data.get("image_url", "")
         max_participants = data.get("max_participants")
+        category = data.get("category")
+        club = data.get("club")
         
         if not title:
             return json({"basarili": False, "mesaj": "Başlık gerekli."}, status=400)
@@ -1563,6 +1587,8 @@ async def admin_create_event(request):
             end_datetime=end_dt,
             image_url=image_url,
             max_participants=max_participants,
+            category=category,
+            club=club,
             is_active=True
         )
         
@@ -1595,7 +1621,11 @@ async def admin_update_event(request, event_id):
         if "location" in data:
             event.location = data["location"]
         if "university_id" in data:
-            event.university_id = data["university_id"]
+            val = data["university_id"]
+            if val == "" or val is None:
+                event.university_id = None
+            else:
+                event.university_id = int(val)
         if "is_active" in data:
             event.is_active = data["is_active"]
         if "image_url" in data:  # 🔥 Fotoğraf güncelleme
@@ -1605,7 +1635,17 @@ async def admin_update_event(request, event_id):
                 print(f"✅ Etkinlik {event_id} için fotoğraf güncellendi (size: {len(data['image_url'])} chars)")
         
         if "max_participants" in data:
-            event.max_participants = data["max_participants"]
+            val = data["max_participants"]
+            if val == "" or val is None:
+                event.max_participants = None
+            else:
+                event.max_participants = int(val)
+
+        if "category" in data:  # 🔥 Kategori güncelleme
+            event.category = data["category"]
+
+        if "club" in data:  # 🔥 Kulüp güncelleme
+            event.club = data["club"]
         
         if "start_datetime" in data and data["start_datetime"]:
             event.start_datetime = datetime.fromisoformat(data["start_datetime"])
@@ -1619,6 +1659,7 @@ async def admin_update_event(request, event_id):
     except Exception as e:
         print(f"Etkinlik güncelleme hatası: {e}")
         return json({"basarili": False, "mesaj": str(e)}, status=500)
+
 
 
 # Etkinlik sil
@@ -2055,6 +2096,8 @@ async def get_event_for_edit(request, event_id):
                 "end_datetime": event.end_datetime.isoformat() if event.end_datetime else None,
                 "is_active": event.is_active,
                 "max_participants": event.max_participants,
+                "category": event.category,  # 🔥 Kategori eklendi
+                "club": event.club,  # 🔥 Kulüp eklendi
             }
         })
     except Exception as e:
