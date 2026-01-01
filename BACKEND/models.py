@@ -116,37 +116,3 @@ class Feedback(models.Model):
     class Meta:
         table = "feedbacks"
 
-# 6. İletişim Kullanıcı Tipleri
-class ContactUserTypes(models.Model):
-    id = fields.IntField(pk=True)
-    label = fields.CharField(max_length=100)
-    is_active = fields.BooleanField(default=True)
-
-    class Meta:
-        table = "contact_user_types"
-
-# 7. İletişim Konu Tipleri
-class ContactTopicTypes(models.Model):
-    id = fields.IntField(pk=True)
-    label = fields.CharField(max_length=100)
-    is_active = fields.BooleanField(default=True)
-
-    class Meta:
-        table = "contact_topic_types"
-
-# 8. İletişim Mesajları
-class ContactMessages(models.Model):
-    contact_id = fields.IntField(pk=True)
-    full_name = fields.CharField(max_length=255)
-    email = fields.CharField(max_length=255)
-    university = fields.CharField(max_length=255, null=True)
-    message = fields.TextField()
-    consent = fields.BooleanField(default=False)
-    
-    user_type = fields.ForeignKeyField("models.ContactUserTypes", null=True, source_field="user_type_id")
-    topic_type = fields.ForeignKeyField("models.ContactTopicTypes", null=True, source_field="topic_type_id")
-    
-    created_at = fields.DatetimeField(auto_now_add=True)
-
-    class Meta:
-        table = "contact_messages"

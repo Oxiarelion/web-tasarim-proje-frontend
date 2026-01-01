@@ -155,10 +155,14 @@ const MainPage = () => {
   }, [token]);
 
   useEffect(() => {
-    fetch("https://date.nager.at/api/v3/PublicHolidays/2025/TR")
-      .then((res) => res.json())
-      .then((data) => setTatiller(data))
-      .catch((err) => console.error(err));
+    Promise.all([
+      fetch("https://date.nager.at/api/v3/PublicHolidays/2025/TR").then((res) => res.json()),
+      fetch("https://date.nager.at/api/v3/PublicHolidays/2026/TR").then((res) => res.json())
+    ])
+      .then(([data2025, data2026]) => {
+        setTatiller([...data2025, ...data2026]);
+      })
+      .catch((err) => console.error("Tatil verisi alınamadı:", err));
   }, []);
 
   const toggleFavori = async (etkinlik) => {

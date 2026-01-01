@@ -1,0 +1,88 @@
+﻿================================================================================
+BACKEND'DE TANIMLI T▄M ENDPOINT'LER:
+================================================================================
+  DELETE /api/admin/events/{id}
+  DELETE /api/admin/feedbacks/{id}
+  DELETE /api/admin/messages/{id}
+  DELETE /api/admin/universities/{id}
+  DELETE /api/admin/users/{id}
+  GET /
+  GET /api/admin/dashboard
+  GET /api/admin/events
+  GET /api/admin/events/{id}/edit
+  GET /api/admin/feedbacks
+  GET /api/admin/messages
+  GET /api/admin/universities
+  GET /api/admin/users
+  GET /api/admin/users/{id}
+  GET /api/contact
+  GET /api/contact/about
+  GET /api/contact/cards
+  GET /api/contact/club-info
+  GET /api/contact/form-options
+  GET /api/contact/header
+  GET /api/contact/messages
+  GET /api/contact/team
+  GET /api/etkinlik/{id}
+  GET /api/etkinlikler
+  GET /api/faq
+  GET /api/faq/{id}
+  GET /api/feedback
+  GET /api/kullanici-ara
+  GET /api/kullanicilar
+  GET /api/profile
+  GET /api/public-profile/{id}
+  GET /api/takvim
+  GET /api/universities
+  POST /api/admin/events
+  POST /api/admin/feedbacks/{id}/reply
+  POST /api/admin/universities
+  POST /api/admin/users
+  POST /api/admin/users/{id}/ban
+  POST /api/admin/users/{id}/unban
+  POST /api/contact
+  POST /api/etkinlik/{id}/yorum
+  POST /api/feedback
+  POST /api/giris
+  POST /api/kayit-ol
+  POST /api/profil/foto-guncelle
+  POST /api/sifre-sifirla
+  POST /api/sifremi-unuttum
+  POST /api/takvim/ekle
+  PUT /api/admin/events/{id}
+  PUT /api/admin/feedbacks/{id}
+  PUT /api/admin/universities/{id}
+  PUT /api/admin/users/{id}
+  PUT /api/profile
+
+================================================================================
+FRONTEND'DE KULLANILAN API'LER:
+================================================================================
+  /api/admin/dashboard
+  /api/admin/events
+  /api/admin/events/{id}
+  /api/admin/events/{id}/edit
+  /api/admin/feedbacks
+  /api/admin/feedbacks/{id}/reply
+  /api/admin/messages
+  /api/admin/messages/{id}
+  /api/admin/universities
+  /api/admin/universities/{id}
+  /api/admin/users
+  /api/admin/users/{id}
+  /api/admin/users/{id}/ban
+  /api/admin/users/{id}/unban
+  /api/etkinlik/{id}
+  /api/etkinlikler
+  /api/faq
+  /api/feedback
+  /api/giris
+  /api/kayit-ol
+  /api/profile
+  /api/sifre-sifirla
+  /api/takvim
+  /api/takvim/ekle
+  /api/universities
+  /api/v3/PublicHolidays/2025/TR
+
+================================================================================

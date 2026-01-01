@@ -16,8 +16,7 @@ from email.message import EmailMessage
 from functools import partial, wraps
 from tortoise import Tortoise, connections
 from models import (
-    User, UserProfile, Event, FavouriteEvent, Comment, Feedback,
-    ContactUserTypes, ContactTopicTypes, ContactMessages, University
+    User, UserProfile, Event, FavouriteEvent, Comment, Feedback, University
 )
 import pytz
 
@@ -233,11 +232,11 @@ FAQ_ITEMS = [
     { "id": 3, "question": "Bir etkinliği takvime nasıl eklerim?", "answer": "Anasayfada bulunan 'Favorilere Ekle' butonuna tıklayarak etkinliği kişisel takviminize ekleyebilirsiniz." },
     { "id": 4, "question": "CampusHub Ankara’ya üye olmam gerekiyor mu?", "answer": "Evet , diğer insanlarla etkileşime girebilmek için üye olmalısınız." },
     { "id": 5, "question": "Üyelik ücretli mi?", "answer": "Hayır. CampusHub Ankara tamamen ücretsiz bir platformdur." },
-    { "id": 6, "question": "Yanlış listelenen bir etkinliği nasıl bildiririm?", "answer": "Etkinlik detay sayfasındaki 'Hata Bildir' butonunu kullanarak bize ulaşabilirsiniz." },
+    { "id": 6, "question": "Yanlış listelenen bir etkinliği nasıl bildiririm?", "answer": "İstek ve Şikayet bölümünden bize bildirebilirsiniz." },
     { "id": 7, "question": "Etkinlikler sadece Ankara için mi?", "answer": "Şu an sadece Ankara için hizmet veriyoruz. İleride diğer şehirleri de eklemeyi planlıyoruz." },
-    { "id": 8, "question": "Kendi kulübümün etkinliğini nasıl ekleyebilirim?", "answer": "Yakında kulüpler için 'Organizatör Paneli' eklenecek. Şimdilik 'Etkinlik Ekle' formu üzerinden bize ulaşabilirsiniz." },
+    { "id": 8, "question": "Kendi kulübümün etkinliğini nasıl ekleyebilirim?", "answer": "Yakında kulüpler için 'Organizatör Paneli' eklenecek. Şimdilik istek ve şikayet bölümünden veya campushub06@gmail.com adresimizden bize ulaşabilirsiniz" },
     { "id": 9, "question": "Verilerimi nasıl saklıyorsunuz?", "answer": "Kullanıcı verileri güvenli sunucularda ve KVKK’ya uygun şekilde saklanmaktadır." },
-    { "id": 10, "question": "Mobil uygulamanız var mı?", "answer": "Şu an mobil uyumlu web sitemiz var. İleride Android ve iOS uygulamaları da yayınlamayı planlıyoruz." },
+    { "id": 10, "question": "Mobil uygulamanız var mı?", "answer": "Şu güncel web sitemiz var. İleride Android ve iOS uygulamaları da yayınlamayı planlıyoruz." },
 ]
 
 
@@ -452,6 +451,7 @@ async def sifre_sifirla(request):
 async def etkinlikler(request):
     university_name = request.args.get("university")
     date_str = request.args.get("date")
+    status = request.args.get("status")
 
     query = """
         SELECT 
@@ -476,7 +476,13 @@ async def etkinlikler(request):
         query += " AND DATE(e.start_datetime) = %s"
         params.append(date_str)
 
-    query += " ORDER BY e.start_datetime ASC"
+    if status == "guncel":
+        # Şu anki zamanı al (UTC veya veritabanı ile uyumlu olmalı)
+        now = datetime.utcnow()
+        query += " AND e.end_datetime >= %s"
+        params.append(now)
+
+    query += " ORDER BY e.start_datetime DESC"
 
     try:
         conn = connections.get("default")
@@ -504,28 +510,6 @@ async def etkinlikler(request):
         return json({"basarili": False, "hata": str(e)}, status=500)
 
 
-# -------------------------------------------------
-# Kullanıcılar (Admin Paneli İçin)
-# -------------------------------------------------
-@app.get("/api/kullanicilar")
-@authorized()
-async def kullanicilar(request):
-    try:
-        users = await User.all()
-        kullanicilar_list = []
-        
-        for user in users:
-            kullanicilar_list.append({
-                "id": user.id,
-                "name": user.name,
-                "email": user.email,
-                "created_at": str(user.created_at) if user.created_at else None,
-            })
-        
-        return json({"basarili": True, "adet": len(kullanicilar_list), "kullanicilar": kullanicilar_list})
-    except Exception as e:
-        print(f"❌ HATA: {str(e)}")
-        return json({"basarili": False, "hata": str(e)}, status=500)
 
 # -------------------------------------------------
 # Takvime Ekle (ÇOKLU SİLME)
@@ -619,12 +603,6 @@ async def takvim(request):
 async def get_all_faqs(request):
     return json({"faqs": FAQ_ITEMS}, status=200)
 
-@app.get("/api/faq/<faq_id:int>")
-async def get_single_faq(request, faq_id):
-    for item in FAQ_ITEMS:
-        if item["id"] == faq_id:
-            return json(item, status=200)
-    return json({"error": "FAQ bulunamadı."}, status=404)
 
 
 # -------------------------------------------------
@@ -675,169 +653,8 @@ async def create_feedback(request):
 
 
 
-@app.get("/api/feedback")
-async def list_feedback(request):
-    event_id = request.args.get("event_id")
-    status = request.args.get("status")
-
-    q = Feedback.all().prefetch_related("user")
-
-    if event_id:
-        q = q.filter(event_id=event_id)
-    if status:
-        q = q.filter(status=status)
-
-    rows = await q.order_by("-created_at").values(
-        "feedback_id",
-        "event_id",
-        "type",
-        "title",
-        "message",
-        "status",
-        "created_at",
-        email="user__email"
-    )
-
-    return json({"basarili": True, "adet": len(rows), "feedbackler": rows}, status=200)
 
 
-# -------------------------------------------------
-# CONTACT / İLETİŞİM API
-# -------------------------------------------------
-@app.get("/api/contact/header")
-async def contact_header(request):
-    return json({
-        "title": "Bizimle İletişime Geç",
-        "subtitle": (
-            "CampusHub Ankara bağımsız bir öğrenci platformudur. "
-            "Etkinlik ekleme, öneri ve geri bildirim için "
-            "bu sayfadan bizimle iletişime geçebilirsin."
-        )
-    })
-
-@app.get("/api/contact/cards")
-async def contact_cards(request):
-    return json({
-        "cards": [
-            {
-                "type": "email",
-                "title": "E-posta",
-                "text": "campushub@ankara.edu.tr",
-                "href": "mailto:campushub@ankara.edu.tr",
-            },
-            {
-                "type": "github",
-                "title": "GitHub Deposu",
-                "text": "Açık kaynak kodumuzu görüntüleyin ve katkı verin.",
-                "href": "https://github.com/campushub-ankara",
-            },
-        ]
-    })
-
-@app.get("/api/contact/club-info")
-async def contact_club_info(request):
-    return json({
-        "title": "Kulüp / Topluluk Musunuz?",
-        "text": (
-            "Etkinliklerinizi CampusHub Ankara'da listelemek için "
-            "formdan bizimle iletişime geçebilir, kulübünüzü "
-            "platforma ekletmek için başvurabilirsiniz."
-        )
-    })
-
-@app.get("/api/contact/about")
-async def contact_about(request):
-    return json({
-        "title": "Biz Kimiz?",
-        "text": (
-            "CampusHub Ankara, Ankara’daki üniversite ve kulüp etkinliklerini "
-            "tek bir platformda toplayan, öğrenciler tarafından geliştirilen "
-            "bağımsız bir öğrenci girişimidir. Amacımız, sosyal medyayı aktif "
-            "kullanmayan öğrencilerin de kampüsteki fırsatlara kolayca "
-            "ulaşmasını sağlamaktır."
-        )
-    })
-
-@app.get("/api/contact/team")
-async def contact_team(request):
-    return json({
-        "title": "CampusHub Ekibi",
-        "members": [
-            {"name": "İlayda Ceylan", "roles": ["Backend", "CI/CD"], "photo": None},
-            {"name": "Zeynep Bahar Arık", "roles": ["Frontend", "Data Layer", "Testing"], "photo": None},
-            {"name": "Zeynepnaz Yüksel", "roles": ["Backend", "Frontend", "Testing"], "photo": None},
-            {"name": "Buğra Kılıç", "roles": ["Backend", "CI/CD"], "photo": None},
-            {"name": "Osman Kağan Mahir", "roles": ["Frontend", "Data Layer"], "photo": None},
-        ]
-    })
-
-@app.get("/api/contact/form-options")
-async def contact_form_options(request):
-    user_types = await ContactUserTypes.filter(is_active=True).order_by("id").values("id", "label")
-    topic_types = await ContactTopicTypes.filter(is_active=True).order_by("id").values("id", "label")
-    return json({"user_types": user_types, "topic_types": topic_types}, status=200)
-
-@app.get("/api/contact")
-async def contact_get(request):
-    return json({"ok": True, "message": "Contact endpoint çalışıyor!"}, status=200)
-
-@app.post("/api/contact")
-async def contact_post(request):
-    data = request.json or {}
-
-    full_name = (data.get("full_name") or "").strip()
-    email = (data.get("email") or "").strip()
-    university = (data.get("university") or "").strip()
-    user_type_label = (data.get("user_type") or "").strip()
-    topic_label = (data.get("topic") or "").strip()
-    message_text = (data.get("message") or "").strip()
-    consent = data.get("consent", False)
-
-    required_fields = ["full_name", "email", "university", "user_type", "topic", "message"]
-    missing = [f for f in required_fields if not data.get(f)]
-    if consent is not True:
-        missing.append("consent")
-
-    if missing:
-        return json({"ok": False, "error": "Eksik veya doldurulmamış alanlar var.", "missing": missing}, status=400)
-
-    if "@" not in email:
-        return json({"ok": False, "error": "Geçersiz e-posta adresi."}, status=400)
-
-    ut = await ContactUserTypes.get_or_none(label=user_type_label, is_active=True)
-    if not ut:
-        return json({"ok": False, "error": "Geçersiz kullanıcı tipi."}, status=400)
-
-    tt = await ContactTopicTypes.get_or_none(label=topic_label, is_active=True)
-    if not tt:
-        return json({"ok": False, "error": "Geçersiz mesaj türü."}, status=400)
-
-    contact_msg = await ContactMessages.create(
-        full_name=full_name,
-        email=email,
-        university=university,
-        user_type=ut,
-        topic_type=tt,
-        message=message_text,
-        consent=True
-    )
-
-    return json({"ok": True, "message": "İletişim formu başarıyla alındı.", "contact_id": contact_msg.contact_id}, status=201)
-
-@app.get("/api/contact/messages")
-async def list_messages(request):
-    rows = await ContactMessages.all().prefetch_related("user_type", "topic_type").order_by("-created_at").values(
-        "contact_id",
-        "full_name",
-        "email",
-        "university",
-        "message",
-        "consent",
-        "created_at",
-        user_type="user_type__label",
-        topic_type="topic_type__label",
-    )
-    return json({"ok": True, "count": len(rows), "messages": rows}, status=200)
 
 
 # -------------------------------------------------
@@ -1366,133 +1183,6 @@ async def admin_list_users(request):
         return json({"basarili": False, "mesaj": str(e)}, status=500)
 
 
-# Kullanıcı detayları
-@app.get("/api/admin/users/<user_id:int>")
-@admin_required()
-async def admin_get_user(request, user_id):
-    """Belirli bir kullanıcının detaylarını getir"""
-    try:
-        user = await User.get_or_none(user_id=user_id).prefetch_related("profile")
-        if not user:
-            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
-        
-        return json({
-            "basarili": True,
-            "user": {
-                "user_id": user.user_id,
-                "email": user.email,
-                "full_name": user.profile.full_name if user.profile else "",
-                "bio": user.profile.bio if user.profile else "",
-                "department": user.profile.department if user.profile else "",
-                "grade": user.profile.grade if user.profile else "",
-                "phone_number": user.profile.phone_number if user.profile else "",
-                "role": user.role,
-                "is_admin": user.is_admin,
-                "is_active": user.is_active,
-                "created_at": user.created_at.isoformat() if user.created_at else None,
-                "last_login": user.last_login.isoformat() if user.last_login else None,
-            }
-        })
-    except Exception as e:
-        print(f"Kullanıcı detay hatası: {e}")
-        return json({"basarili": False, "mesaj": str(e)}, status=500)
-
-
-# Yeni admin kullanıcı oluştur
-@app.post("/api/admin/users")
-@admin_required()
-async def admin_create_user(request):
-    """Yeni kullanıcı (admin) oluştur"""
-    try:
-        data = request.json or {}
-        email = (data.get("email") or "").strip().lower()
-        password = data.get("password") or ""
-        full_name = (data.get("full_name") or "").strip()
-        is_admin = data.get("is_admin", False)
-        
-        if not email or not password:
-            return json({"basarili": False, "mesaj": "Email ve şifre gerekli."}, status=400)
-        
-        # Kullanıcı zaten var mı?
-        existing = await User.get_or_none(email=email)
-        if existing:
-            return json({"basarili": False, "mesaj": "Bu e-posta zaten kayıtlı."}, status=409)
-        
-        # Şifreyi hash'le
-        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        
-        # Kullanıcı oluştur
-        user = await User.create(
-            email=email,
-            password=hashed_password,
-            is_admin=is_admin,
-            role="admin" if is_admin else "user"
-        )
-        
-        # Profil oluştur
-        await UserProfile.create(
-            user=user,
-            full_name=full_name or "",
-            bio="",
-            department="",
-            grade="",
-            phone_number="",
-            profile_photo="",
-            cover_photo=""
-        )
-        
-        return json({
-            "basarili": True,
-            "mesaj": "Kullanıcı başarıyla oluşturuldu.",
-            "user_id": user.user_id
-        }, status=201)
-    except Exception as e:
-        print(f"Kullanıcı oluşturma hatası: {e}")
-        return json({"basarili": False, "mesaj": str(e)}, status=500)
-
-
-# Kullanıcı güncelle
-@app.put("/api/admin/users/<user_id:int>")
-@admin_required()
-async def admin_update_user(request, user_id):
-    """Kullanıcı bilgilerini güncelle"""
-    try:
-        user = await User.get_or_none(user_id=user_id).prefetch_related("profile")
-        if not user:
-            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
-        
-        data = request.json or {}
-        
-        # User alanları
-        if "is_admin" in data:
-            user.is_admin = data["is_admin"]
-            user.role = "admin" if data["is_admin"] else "user"
-        
-        if "is_active" in data:
-            user.is_active = data["is_active"]
-        
-        await user.save()
-        
-        # Profile alanları
-        if user.profile:
-            if "full_name" in data:
-                user.profile.full_name = data["full_name"]
-            if "bio" in data:
-                user.profile.bio = data["bio"]
-            if "department" in data:
-                user.profile.department = data["department"]
-            if "grade" in data:
-                user.profile.grade = data["grade"]
-            if "phone_number" in data:
-                user.profile.phone_number = data["phone_number"]
-            
-            await user.profile.save()
-        
-        return json({"basarili": True, "mesaj": "Kullanıcı başarıyla güncellendi."})
-    except Exception as e:
-        print(f"Kullanıcı güncelleme hatası: {e}")
-        return json({"basarili": False, "mesaj": str(e)}, status=500)
-
 
 # Kullanıcı sil
 @app.delete("/api/admin/users/<user_id:int>")
@@ -1737,45 +1427,7 @@ async def admin_delete_message(request, contact_id):
 
 
 
-# Feedback durumu güncelle
-@app.put("/api/admin/feedbacks/<feedback_id:int>")
-@admin_required()
-async def admin_update_feedback(request, feedback_id):
-    """Feedback durumunu güncelle"""
-    try:
-        feedback = await Feedback.get_or_none(feedback_id=feedback_id)
-        if not feedback:
-            return json({"basarili": False, "mesaj": "Feedback bulunamadı."}, status=404)
-        
-        data = request.json or {}
-        
-        if "status" in data:
-            feedback.status = data["status"]
-        
-        await feedback.save()
-        
-        return json({"basarili": True, "mesaj": "Feedback durumu güncellendi."})
-    except Exception as e:
-        print(f"Feedback güncelleme hatası: {e}")
-        return json({"basarili": False, "mesaj": str(e)}, status=500)
 
-
-# Feedback sil
-@app.delete("/api/admin/feedbacks/<feedback_id:int>")
-@admin_required()
-async def admin_delete_feedback(request, feedback_id):
-    """Feedback'i sil"""
-    try:
-        feedback = await Feedback.get_or_none(feedback_id=feedback_id)
-        if not feedback:
-            return json({"basarili": False, "mesaj": "Feedback bulunamadı."}, status=404)
-        
-        await feedback.delete()
-        
-        return json({"basarili": True, "mesaj": "Feedback başarıyla silindi."})
-    except Exception as e:
-        print(f"Feedback silme hatası: {e}")
-        return json({"basarili": False, "mesaj": str(e)}, status=500)
 
 
 # -------------------------------------------------

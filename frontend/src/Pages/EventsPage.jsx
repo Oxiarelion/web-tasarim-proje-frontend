@@ -7,6 +7,7 @@ const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
 
 const EventsPage = () => {
   const [secilenUni, setSecilenUni] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all"); // 'all' or 'guncel'
   const [dbEtkinlikler, setDbEtkinlikler] = useState([]);
   const [favoriler, setFavoriler] = useState([]);
   const [menuAcik, setMenuAcik] = useState(false);
@@ -92,7 +93,11 @@ const EventsPage = () => {
   useEffect(() => {
     if (!token) return;
     let url = "http://127.0.0.1:8000/api/etkinlikler";
-    if (secilenUni) url += `?university=${encodeURIComponent(secilenUni)}`;
+    const params = [];
+    if (secilenUni) params.push(`university=${encodeURIComponent(secilenUni)}`);
+    if (filterStatus === "guncel") params.push("status=guncel");
+    
+    if (params.length > 0) url += `?${params.join("&")}`;
 
     fetch(url, {
       method: "GET",
@@ -108,7 +113,7 @@ const EventsPage = () => {
         else setDbEtkinlikler([]);
       })
       .catch((err) => console.error(err));
-  }, [token, secilenUni]);
+  }, [token, secilenUni, filterStatus]);
 
   useEffect(() => {
     if (!token) return;
@@ -289,19 +294,33 @@ const EventsPage = () => {
             id="universite"
             style={{ marginBottom: "30px" }}
           >
-            <h2 className="page-title">Tüm Etkinlikler</h2>
-            <select
-              value={secilenUni}
-              onChange={(e) => setSecilenUni(e.target.value)}
-              className="uni-select"
-            >
-              <option value="">Tüm Üniversiteler</option>
-              {universiteler.map((uni, i) => (
-                <option key={i} value={uni}>
-                  {uni}
-                </option>
-              ))}
-            </select>
+            <h2 className="page-title">
+              {filterStatus === "guncel" ? "Güncel Etkinlikler" : "Tüm Etkinlikler"}
+            </h2>
+            <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="uni-select" // Same styling
+                style={{ minWidth: "150px" }}
+              >
+                <option value="all">Tüm Etkinlikler</option>
+                <option value="guncel">Güncel Etkinlikler</option>
+              </select>
+
+              <select
+                value={secilenUni}
+                onChange={(e) => setSecilenUni(e.target.value)}
+                className="uni-select"
+              >
+                <option value="">Tüm Üniversiteler</option>
+                {universiteler.map((uni, i) => (
+                  <option key={i} value={uni}>
+                    {uni}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="events-grid">
@@ -323,30 +342,43 @@ const EventsPage = () => {
                     key={index}
                     className="etkinlik-kutu"
                     onClick={() => navigate(`/etkinlik/${etkinlik.id}`)}
-                    style={{ cursor: "pointer" }}
                   >
                     <div className="kutu-header">
-                      <div className="kutu-tarih">
-                        <span className="kutu-gun">{gun}</span>
-                        <span className="kutu-ay">{ayAdi}</span>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          gap: "5px",
+                        }}
+                      >
+                        <div className="kutu-tarih">
+                          <span className="kutu-gun">{gun}</span>
+                          <span className="kutu-ay">{ayAdi}</span>
+                        </div>
+                        {etkinlik.end_datetime &&
+                          new Date(etkinlik.end_datetime) < new Date() && (
+                            <div
+                              style={{
+                                background: "#dc2626",
+                                color: "white",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontSize: "0.7rem",
+                                fontWeight: "bold",
+                                whiteSpace: "nowrap",
+                                boxShadow: "0 2px 4px rgba(220, 38, 38, 0.4)",
+                              }}
+                            >
+                              Süresi Geçti
+                            </div>
+                          )}
                       </div>
                       <div style={{ flex: 1 }}>
                         <h3 className="kutu-baslik">
                           {etkinlik.title}
-                          {etkinlik.end_datetime && new Date(etkinlik.end_datetime) < new Date() && (
-                            <span style={{
-                              marginLeft: "10px",
-                              padding: "4px 8px",
-                              fontSize: "0.75rem",
-                              fontWeight: "bold",
-                              color: "#fff",
-                              background: "#6b7280",
-                              borderRadius: "6px"
-                            }}>
-                              Süresi Geçti
-                            </span>
-                          )}
                         </h3>
+
                         {etkinlik.university && (
                           <span className="kutu-uni">
                             {etkinlik.university}
