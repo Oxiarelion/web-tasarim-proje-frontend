@@ -155,7 +155,7 @@ export default function PublicProfile() {
                         <div className="pp__eventImgWrap">
                           <img
                             className="pp__eventImg"
-                            src="https://images.unsplash.com/photo-1501612780327-45045538702b?auto=format&fit=crop&w=1200&q=80"
+                            src={ev.image_url || "https://images.unsplash.com/photo-1501612780327-45045538702b?auto=format&fit=crop&w=1200&q=80"}
                             alt={ev.title}
                           />
                           <span className="pp__tag">{ev.university}</span>
@@ -180,15 +180,23 @@ export default function PublicProfile() {
             {activeTab === "comments" && (
               <section className="pp__card">
                 <div className="pp__panel">
-                  <div className="pp__panelBlock">
+                  <div className="pp__panelBlock" style={{ maxHeight: "500px", overflowY: "auto" }}>
                     {comments.length > 0 ? (
                       comments.map((com) => (
-                        <div key={com.id} className="pp__commentItem">
+                        <div 
+                          key={com.id} 
+                          className="pp__commentItem"
+                          onClick={() => com.event_id && navigate(`/etkinlik/${com.event_id}`)}
+                          style={{ cursor: com.event_id ? "pointer" : "default" }}
+                        >
                           <div className="pp__commentHeader">
                             <span className="pp__commentEvent">
                               {com.event_title}
                             </span>
                             <span className="pp__commentDate">{com.date}</span>
+                          </div>
+                          <div className="pp__commentMeta" style={{ fontSize: "0.85rem", color: "#999", marginTop: "5px" }}>
+                            📅 {com.event_date || "Tarih yok"} • 🏛️ {com.event_university || "Genel"}
                           </div>
                           <div className="pp__commentText">"{com.message}"</div>
                         </div>

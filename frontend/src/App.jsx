@@ -9,6 +9,10 @@ import ResetPassword from "./Pages/ResetPassword";
 import PublicProfile from "./Pages/PublicProfile";
 import EventDetails from "./Pages/EventDetails";
 import EventsPage from "./Pages/EventsPage";
+import AdminPanel from "./Pages/AdminPanel";
+import UniversitiesPage from "./Pages/UniversitiesPage";
+import FAQPage from "./Pages/FAQPage";
+import FeedbackPage from "./Pages/FeedbackPage";
 
 function App() {
   return (
@@ -21,6 +25,10 @@ function App() {
         <Route path="/profil/:id" element={<PublicProfile />} />
         <Route path="/etkinlik/:id" element={<EventDetails />} />
         <Route path="/tum-etkinlikler" element={<EventsPage />} />
+        <Route path="/universiteler" element={<UniversitiesPage />} />
+        <Route path="/sss" element={<FAQPage />} />
+        <Route path="/feedback" element={<FeedbackPage />} />
+        <Route path="/admin" element={<AdminPanel />} />
       </Routes>
     </Router>
   );

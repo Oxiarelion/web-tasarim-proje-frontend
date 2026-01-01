@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 import os
 import base64  # 🔥 RESİM İŞLEMLERİ İÇİN BU GEREKLİ
+import bcrypt  # 🔥 ŞİFRE HASH'LEME İÇİN
 
 # 1. .env DOSYASINI YÜKLE
 load_dotenv()
@@ -29,15 +30,46 @@ SECRET_KEY = os.getenv("SECRET_KEY", "bu_cok_gizli_ve_uzun_bir_sifredir_kimse_bi
 # 🔥 İSTANBUL TIMEZONE (UTC+3) 🔥
 ISTANBUL_TZ = pytz.timezone('Europe/Istanbul')
 
-# 🔥 HELPER FUNCTION: UTC'den İstanbul Saatine Çevir 🔥
+# 🔥 HELPER FUNCTION: Datetime'ı İstanbul Saatine Çevir 🔥
 def to_istanbul_tz(dt):
-    """UTC datetime'ı Istanbul timezone'a çevir"""
+    """Datetime'ı Istanbul timezone'a çevir
+    
+    Tortoise ORM timezone='UTC' ve use_tz=True ile çalışıyor, 
+    bu yüzden datetime'lar UTC timezone-aware olarak dönüyor.
+    """
     if dt is None:
         return None
+    
+    # Tortoise ORM UTC aware datetime döndürüyor, Istanbul'a çevir
     if dt.tzinfo is None:
-        # Naive datetime ise UTC olarak kabul et ve timezone ekle
-        dt = timezone.utc.localize(dt) if hasattr(timezone.utc, 'localize') else dt.replace(tzinfo=timezone.utc)
+        # Naive datetime ise UTC olarak kabul et (güvenlik için)
+        dt = dt.replace(tzinfo=timezone.utc)
+    
     return dt.astimezone(ISTANBUL_TZ)
+
+# 🔥 HELPER FUNCTION: İstanbul Saatinde Şu Anki Zaman 🔥
+def now_istanbul():
+    """İstanbul timezone'ında şu anki zamanı döndür (UTC+3)"""
+    return datetime.now(ISTANBUL_TZ)
+
+def to_istanbul_datetime(dt_str):
+    """ISO string'i Istanbul timezone datetime'a çevir
+    Frontend lokal (Istanbul) saati gönderiyor, biz bunu timezone-aware yapıyoruz
+    """
+    if not dt_str:
+        return None
+    
+    # ISO formatındaki string'i parse et
+    dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+    
+    # Eğer timezone bilgisi yoksa (naive), Istanbul timezone'u olarak kabul et
+    if dt.tzinfo is None:
+        dt = ISTANBUL_TZ.localize(dt)
+    else:
+        # Timezone varsa, Istanbul'a çevir
+        dt = dt.astimezone(ISTANBUL_TZ)
+    
+    return dt
 
 # 🔥 BASİT RAM ÖNBELLEĞİ (CACHE) 🔥
 # Kullanıcı profillerini burada tutacağız: {user_id: {profil_verisi}}
@@ -63,6 +95,45 @@ def authorized():
             try:
                 payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
                 request.ctx.user_id = payload["user_id"]
+            except jwt.ExpiredSignatureError:
+                return json({"basarili": False, "mesaj": "Oturum süresi doldu. Tekrar giriş yapın."}, status=401)
+            except jwt.InvalidTokenError:
+                return json({"basarili": False, "mesaj": "Geçersiz token."}, status=401)
+
+            return await f(request, *args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+# -------------------------------------------------
+# ADMIN KONTROL (Middleware)
+# -------------------------------------------------
+def admin_required():
+    """Sadece admin kullanıcıların erişebileceği endpoint'ler için"""
+    def decorator(f):
+        @wraps(f)
+        async def decorated_function(request, *args, **kwargs):
+            # Önce token kontrolü yap
+            token = None
+            if "Authorization" in request.headers:
+                try:
+                    token = request.headers["Authorization"].split(" ")[1]
+                except IndexError:
+                    return json({"basarili": False, "mesaj": "Token formatı hatalı."}, status=401)
+            
+            if not token:
+                return json({"basarili": False, "mesaj": "Token bulunamadı. Giriş yapmalısınız."}, status=401)
+
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                user_id = payload["user_id"]
+                request.ctx.user_id = user_id
+                
+                # Kullanıcının admin olup olmadığını kontrol et
+                user = await User.get_or_none(user_id=user_id)
+                if not user or not user.is_admin:
+                    return json({"basarili": False, "mesaj": "Bu işlem için yönetici yetkisi gerekiyor."}, status=403)
+                    
             except jwt.ExpiredSignatureError:
                 return json({"basarili": False, "mesaj": "Oturum süresi doldu. Tekrar giriş yapın."}, status=401)
             except jwt.InvalidTokenError:
@@ -147,8 +218,8 @@ def send_email_sync(email, reset_link):
 FAQ_ITEMS = [
     { "id": 1, "question": "CampusHub Ankara nedir?", "answer": "CampusHub Ankara, Ankara’daki üniversitelerde gerçekleşen etkinlikleri tek bir platformda toplayan öğrenci odaklı bir etkinlik keşif uygulamasıdır." },
     { "id": 2, "question": "Etkinlikleri nereden buluyorsunuz?", "answer": "Etkinlikler üniversitelerin resmi web siteleri, kulüp sayfaları ve sosyal medya hesapları üzerinden toplanarak listelenmektedir." },
-    { "id": 3, "question": "Bir etkinliği takvime nasıl eklerim?", "answer": "Etkinlik detay sayfasında bulunan 'Takvime Ekle' butonuna tıklayarak etkinliği kişisel takviminize ekleyebilirsiniz." },
-    { "id": 4, "question": "CampusHub Ankara’ya üye olmam gerekiyor mu?", "answer": "Çoğu etkinliği görmek için üyelik gerekmez. Ancak etkinlik kaydetme ve favorileme gibi özellikler için üye olmanız gerekir." },
+    { "id": 3, "question": "Bir etkinliği takvime nasıl eklerim?", "answer": "Anasayfada bulunan 'Favorilere Ekle' butonuna tıklayarak etkinliği kişisel takviminize ekleyebilirsiniz." },
+    { "id": 4, "question": "CampusHub Ankara’ya üye olmam gerekiyor mu?", "answer": "Evet , diğer insanlarla etkileşime girebilmek için üye olmalısınız." },
     { "id": 5, "question": "Üyelik ücretli mi?", "answer": "Hayır. CampusHub Ankara tamamen ücretsiz bir platformdur." },
     { "id": 6, "question": "Yanlış listelenen bir etkinliği nasıl bildiririm?", "answer": "Etkinlik detay sayfasındaki 'Hata Bildir' butonunu kullanarak bize ulaşabilirsiniz." },
     { "id": 7, "question": "Etkinlikler sadece Ankara için mi?", "answer": "Şu an sadece Ankara için hizmet veriyoruz. İleride diğer şehirleri de eklemeyi planlıyoruz." },
@@ -186,7 +257,10 @@ async def kayit_ol(request):
     if existing:
         return json({"basarili": False, "mesaj": "Bu e-posta zaten kayıtlı."}, status=409)
 
-    user = await User.create(email=email, password=password)
+    # 🔥 Şifreyi hash'le
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    user = await User.create(email=email, password=hashed_password)
     await UserProfile.create(
         user=user, 
         full_name=full_name,
@@ -217,27 +291,78 @@ async def giris(request):
     if not user:
         return json({"basarili": False, "mesaj": "Bu e-posta ile kayıt bulunamadı."}, status=404)
 
-    if user.password != password:
+    # 🔥 Şifre kontrolü - hem hash'li hem plain text şifreleri destekle
+    password_valid = False
+    
+    try:
+        # Önce hash'lenmiş şifre olarak kontrol et
+        if bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8')):
+            password_valid = True
+    except (ValueError, AttributeError):
+        # Hash'lenmiş değilse (eski kullanıcı), plain text olarak kontrol et
+        if user.password == password:
+            password_valid = True
+            # 🔥 Otomatik migrate: Plain text şifreyi hash'le
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            user.password = hashed_password
+            await user.save(update_fields=["password"])
+            print(f"✅ Kullanıcı {email} şifresi otomatik olarak hash'lendi")
+    
+    if not password_valid:
         return json({"basarili": False, "mesaj": "Şifre yanlış."}, status=401)
 
+    # 🔥 BAN KONTROLÜ
+    if user.is_banned:
+        # Ban süresi kontrolü
+        if user.ban_until:
+            # Ban süresi geçmiş mi?
+            now = now_istanbul()
+            ban_until_ist = to_istanbul_tz(user.ban_until)
+            
+            if now >= ban_until_ist:
+                # Ban süresi dolmuş, otomatik kaldır
+                user.is_banned = False
+                user.ban_reason = None
+                user.ban_until = None
+                await user.save(update_fields=["is_banned", "ban_reason", "ban_until"])
+                print(f"✅ Kullanıcı {email} banı otomatik olarak kaldırıldı (süre doldu)")
+            else:
+                # Hala banlı
+                kalan_sure = ban_until_ist - now
+                kalan_gun = kalan_sure.days
+                kalan_saat = kalan_sure.seconds // 3600
+                kalan_dakika = (kalan_sure.seconds % 3600) // 60
+                return json({
+                    "basarili": False, 
+                    "mesaj": f"Hesabınız yasaklandı. Sebep: {user.ban_reason or 'Belirtilmemiş'}. Kalan süre: {kalan_gun} gün {kalan_saat} saat {kalan_dakika} dakika"
+                }, status=403)
+        else:
+            # Kalıcı ban
+            return json({
+                "basarili": False, 
+                "mesaj": f"Hesabınız kalıcı olarak yasaklandı. Sebep: {user.ban_reason or 'Belirtilmemiş'}"
+            }, status=403)
+
+
     # Token oluşturma
-    expiration_time = datetime.now(timezone.utc) + timedelta(hours=24)
+    expiration_time = now_istanbul() + timedelta(hours=24)
     token_payload = {
         "user_id": user.user_id,
         "email": user.email,
+        "is_admin": user.is_admin,  # 🔥 Token'a admin bilgisi ekle
         "exp": expiration_time
     }
     
     token = jwt.encode(token_payload, SECRET_KEY, algorithm="HS256")
 
-    user.last_login = datetime.now()
+    user.last_login = now_istanbul()
     await user.save(update_fields=["last_login"])
 
     return json({
         "basarili": True, 
         "mesaj": "Hoş geldin!",
         "token": token,
-        "user": {"email": user.email, "role": user.role}
+        "user": {"email": user.email, "role": user.role, "is_admin": user.is_admin}
     }, status=200)
 
 
@@ -259,10 +384,11 @@ async def sifremi_unuttum(request):
         return json({"basarili": False, "mesaj": "Bu e-posta sistemde kayıtlı değil."}, status=404)
 
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    expires_at = now_istanbul() + timedelta(hours=1)
     RESET_TOKENS[token] = {"email": email, "expires_at": expires_at}
 
-    reset_link = f"http://localhost:5173/sifre-sifirla?token={token}"
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    reset_link = f"{frontend_url}/sifre-sifirla?token={token}"
 
     try:
         loop = asyncio.get_running_loop()
@@ -283,9 +409,9 @@ async def sifre_sifirla(request):
     new_password = data.get("password", "")
 
     entry = RESET_TOKENS.get(token)
-    now_utc = datetime.now(timezone.utc)
+    now_ist = now_istanbul()
 
-    if not entry or entry["expires_at"] < now_utc:
+    if not entry or entry["expires_at"] < now_ist:
         return json({"basarili": False, "mesaj": "Bağlantı geçersiz veya süresi dolmuş."}, status=400)
 
     if len(new_password) < 6:
@@ -296,7 +422,9 @@ async def sifre_sifirla(request):
     if not user:
         return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
 
-    user.password = new_password
+    # 🔥 Yeni şifreyi hash'le
+    hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    user.password = hashed_password
     await user.save(update_fields=["password"])
 
     del RESET_TOKENS[token]
@@ -363,6 +491,29 @@ async def etkinlikler(request):
 
 
 # -------------------------------------------------
+# Kullanıcılar (Admin Paneli İçin)
+# -------------------------------------------------
+@app.get("/api/kullanicilar")
+@authorized()
+async def kullanicilar(request):
+    try:
+        users = await User.all()
+        kullanicilar_list = []
+        
+        for user in users:
+            kullanicilar_list.append({
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "created_at": str(user.created_at) if user.created_at else None,
+            })
+        
+        return json({"basarili": True, "adet": len(kullanicilar_list), "kullanicilar": kullanicilar_list})
+    except Exception as e:
+        print(f"❌ HATA: {str(e)}")
+        return json({"basarili": False, "hata": str(e)}, status=500)
+
+# -------------------------------------------------
 # Takvime Ekle (ÇOKLU SİLME)
 # -------------------------------------------------
 @app.post("/api/takvim/ekle")
@@ -416,6 +567,7 @@ async def takvim(request):
             e.title,
             e.description,
             e.location,
+            e.image_url,
             uni.name AS university,
             e.start_datetime AS start_datetime,
             e.end_datetime AS end_datetime
@@ -438,6 +590,7 @@ async def takvim(request):
             "university": r["university"],
             "location": r["location"],
             "description": r["description"],
+            "image_url": r["image_url"],  # 🔥 Etkinlik fotoğrafı
             "date": sd.strftime("%Y-%m-%d") if sd else None,
             "time": sd.strftime("%H:%M") if sd else None,
         })
@@ -464,29 +617,33 @@ async def get_single_faq(request, faq_id):
 # Feedback (ORM)
 # -------------------------------------------------
 @app.post("/api/feedback")
+@authorized()
 async def create_feedback(request):
     data = request.json or {}
+    user_id = request.ctx.user_id
 
-    email = (data.get("email") or "").strip().lower()
-    event_id = data.get("event_id")
+    event_id = data.get("event_id")  # Artık opsiyonel
     fb_type = (data.get("type") or "").strip() or None
     title = (data.get("title") or "").strip() or None
     message = (data.get("message") or "").strip()
 
-    if not email or not event_id or not message:
-        return json({"basarili": False, "mesaj": "E-posta, etkinlik ve mesaj alanları zorunludur."}, status=400)
+    if not message:
+        return json({"basarili": False, "mesaj": "Mesaj alanı zorunludur."}, status=400)
 
-    user = await User.get_or_none(email=email)
+    user = await User.get_or_none(user_id=user_id)
     if not user:
-        return json({"basarili": False, "mesaj": "Bu e-posta ile kayıtlı kullanıcı bulunamadı."}, status=404)
+        return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
 
-    event = await Event.get_or_none(event_id=event_id)
-    if not event:
-        return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
+    # Etkinlik kontrolü (sadece event_id varsa)
+    event = None
+    if event_id:
+        event = await Event.get_or_none(event_id=event_id)
+        if not event:
+            return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
 
     fb = await Feedback.create(
         user=user,
-        event=event,
+        event=event,  # None olabilir (genel feedback için)
         type=fb_type,
         title=title,
         message=message,
@@ -494,6 +651,7 @@ async def create_feedback(request):
     )
 
     return json({"basarili": True, "mesaj": "Geri bildiriminiz alındı. Teşekkür ederiz.", "feedback_id": fb.feedback_id}, status=201)
+
 
 
 @app.get("/api/feedback")
@@ -659,6 +817,31 @@ async def list_messages(request):
         topic_type="topic_type__label",
     )
     return json({"ok": True, "count": len(rows), "messages": rows}, status=200)
+
+
+# -------------------------------------------------
+# UNİVERSİTELER
+# -------------------------------------------------
+@app.get("/api/universities")
+async def get_universities(request):
+    """Tüm üniversiteleri getir (public endpoint)"""
+    try:
+        universities = await University.all().order_by("name").values(
+            "university_id",
+            "name",
+            "logo_url"
+        )
+        return json({
+            "basarili": True, 
+            "adet": len(universities), 
+            "universities": universities
+        }, status=200)
+    except Exception as e:
+        print(f"❌ Üniversiteler getirme hatası: {str(e)}")
+        return json({
+            "basarili": False, 
+            "mesaj": f"Sunucu hatası: {str(e)}"
+        }, status=500)
 
 
 # -------------------------------------------------
@@ -892,16 +1075,20 @@ async def get_public_profile(request, target_id):
                     "id": e.event_id,
                     "title": e.title,
                     "university": e.university.name if e.university else "Genel",
+                    "image_url": e.image_url,  # 🔥 Etkinlik fotoğrafı
                     "date": e.start_datetime.strftime("%Y-%m-%d") if e.start_datetime else None,
                 })
 
         # 3. Yaptığı Yorumları Çek
-        comments = await Comment.filter(user_id=target_id).prefetch_related("event").order_by("-created_at").all()
+        comments = await Comment.filter(user_id=target_id).prefetch_related("event", "event__university").order_by("-created_at").all()
         yorumlar = []
         for c in comments:
             yorumlar.append({
                 "id": c.comment_id,
+                "event_id": c.event.event_id if c.event else None,  # 🔥 Etkinlik ID
                 "event_title": c.event.title if c.event else "Bilinmeyen Etkinlik",
+                "event_date": c.event.start_datetime.strftime("%d.%m.%Y") if (c.event and c.event.start_datetime) else None,  # 🔥 Etkinlik tarihi
+                "event_university": c.event.university.name if (c.event and c.event.university) else "Genel",  # 🔥 Üniversite
                 "message": c.message,
                 "rating": c.rating,
                 "date": c.created_at.strftime("%d.%m.%Y")
@@ -966,7 +1153,8 @@ async def get_event_detail(request, event_id):
                 "date": event.start_datetime.strftime("%Y-%m-%d"),
                 "time": event.start_datetime.strftime("%H:%M"),
                 "university": event.university.name if event.university else "Genel",
-                "university_logo": event.university.logo_url if event.university else None
+                "university_logo": event.university.logo_url if event.university else None,
+                "image_url": event.image_url  # 🔥 Etkinlik fotoğrafı
             },
             "yorumlar": comment_list
         })
@@ -1035,6 +1223,735 @@ async def add_comment(request, event_id):
     except Exception as e:
         print(f"Yorum Ekleme Hatası: {e}")
         return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# -------------------------------------------------
+# 🔥 ADMIN PANELİ - DASHBOARD İSTATİSTİKLERİ
+# -------------------------------------------------
+@app.get("/api/admin/dashboard")
+@admin_required()
+async def admin_dashboard(request):
+    """Admin paneli için genel istatistikler"""
+    try:
+        # Toplam kullanıcı sayısı
+        total_users = await User.all().count()
+        
+        # Toplam etkinlik sayısı
+        total_events = await Event.all().count()
+        
+        # Aktif etkinlik sayısı
+        active_events = await Event.filter(is_active=True).count()
+        
+        # Toplam mesaj sayısı
+        total_messages = await ContactMessages.all().count()
+        
+        # Toplam feedback sayısı
+        total_feedbacks = await Feedback.all().count()
+        
+        # Pending feedback sayısı
+        pending_feedbacks = await Feedback.filter(status="pending").count()
+        
+        # Son 7 günde eklenen kullanıcılar
+        from datetime import timedelta
+        seven_days_ago = now_istanbul() - timedelta(days=7)
+        new_users_week = await User.filter(created_at__gte=seven_days_ago).count()
+        
+        return json({
+            "basarili": True,
+            "stats": {
+                "total_users": total_users,
+                "total_events": total_events,
+                "active_events": active_events,
+                "total_messages": total_messages,
+                "total_feedbacks": total_feedbacks,
+                "pending_feedbacks": pending_feedbacks,
+                "new_users_week": new_users_week
+            }
+        })
+    except Exception as e:
+        print(f"Dashboard hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# -------------------------------------------------
+# 🔥 ADMIN PANELİ - KULLANICI YÖNETİMİ
+# -------------------------------------------------
+
+# Tüm kullanıcıları listele
+@app.get("/api/admin/users")
+@admin_required()
+async def admin_list_users(request):
+    """Tüm kullanıcıları listele"""
+    try:
+        users = await User.all().prefetch_related("profile").order_by("-created_at")
+        
+        # 🔥 Süresi geçmiş banları otomatik temizle
+        now = now_istanbul()
+        cleared_count = 0
+        
+        users_list = []
+        for user in users:
+            # Ban süresi kontrolü
+            if user.is_banned and user.ban_until:
+                ban_until_ist = to_istanbul_tz(user.ban_until)
+                
+                if now >= ban_until_ist:
+                    # Ban süresi dolmuş, otomatik kaldır
+                    user.is_banned = False
+                    user.ban_reason = None
+                    user.ban_until = None
+                    await user.save(update_fields=["is_banned", "ban_reason", "ban_until"])
+                    cleared_count += 1
+                    print(f"✅ Admin panel: {user.email} banı otomatik kaldırıldı")
+            
+            users_list.append({
+                "user_id": user.user_id,
+                "email": user.email,
+                "full_name": user.profile.full_name if user.profile else "",
+                "role": user.role,
+                "is_admin": user.is_admin,
+                "is_active": user.is_active,
+                "is_banned": user.is_banned,  # 🔥 Güncellenmiş ban durumu
+                "ban_reason": user.ban_reason,  # 🔥 Ban nedeni
+                "ban_until": to_istanbul_tz(user.ban_until).isoformat() if user.ban_until else None,  # 🔥 Istanbul timezone
+                "created_at": to_istanbul_tz(user.created_at).isoformat() if user.created_at else None,  # 🔥 Istanbul timezone
+                "last_login": to_istanbul_tz(user.last_login).isoformat() if user.last_login else None,  # 🔥 Istanbul timezone
+            })
+        
+        if cleared_count > 0:
+            print(f"📊 Admin panel: {cleared_count} kullanıcının süresi geçmiş banı temizlendi")
+        
+        return json({"basarili": True, "count": len(users_list), "users": users_list})
+    except Exception as e:
+        print(f"Kullanıcı listeleme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Kullanıcı detayları
+@app.get("/api/admin/users/<user_id:int>")
+@admin_required()
+async def admin_get_user(request, user_id):
+    """Belirli bir kullanıcının detaylarını getir"""
+    try:
+        user = await User.get_or_none(user_id=user_id).prefetch_related("profile")
+        if not user:
+            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
+        
+        return json({
+            "basarili": True,
+            "user": {
+                "user_id": user.user_id,
+                "email": user.email,
+                "full_name": user.profile.full_name if user.profile else "",
+                "bio": user.profile.bio if user.profile else "",
+                "department": user.profile.department if user.profile else "",
+                "grade": user.profile.grade if user.profile else "",
+                "phone_number": user.profile.phone_number if user.profile else "",
+                "role": user.role,
+                "is_admin": user.is_admin,
+                "is_active": user.is_active,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "last_login": user.last_login.isoformat() if user.last_login else None,
+            }
+        })
+    except Exception as e:
+        print(f"Kullanıcı detay hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Yeni admin kullanıcı oluştur
+@app.post("/api/admin/users")
+@admin_required()
+async def admin_create_user(request):
+    """Yeni kullanıcı (admin) oluştur"""
+    try:
+        data = request.json or {}
+        email = (data.get("email") or "").strip().lower()
+        password = data.get("password") or ""
+        full_name = (data.get("full_name") or "").strip()
+        is_admin = data.get("is_admin", False)
+        
+        if not email or not password:
+            return json({"basarili": False, "mesaj": "Email ve şifre gerekli."}, status=400)
+        
+        # Kullanıcı zaten var mı?
+        existing = await User.get_or_none(email=email)
+        if existing:
+            return json({"basarili": False, "mesaj": "Bu e-posta zaten kayıtlı."}, status=409)
+        
+        # Şifreyi hash'le
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        # Kullanıcı oluştur
+        user = await User.create(
+            email=email,
+            password=hashed_password,
+            is_admin=is_admin,
+            role="admin" if is_admin else "user"
+        )
+        
+        # Profil oluştur
+        await UserProfile.create(
+            user=user,
+            full_name=full_name or "",
+            bio="",
+            department="",
+            grade="",
+            phone_number="",
+            profile_photo="",
+            cover_photo=""
+        )
+        
+        return json({
+            "basarili": True,
+            "mesaj": "Kullanıcı başarıyla oluşturuldu.",
+            "user_id": user.user_id
+        }, status=201)
+    except Exception as e:
+        print(f"Kullanıcı oluşturma hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Kullanıcı güncelle
+@app.put("/api/admin/users/<user_id:int>")
+@admin_required()
+async def admin_update_user(request, user_id):
+    """Kullanıcı bilgilerini güncelle"""
+    try:
+        user = await User.get_or_none(user_id=user_id).prefetch_related("profile")
+        if not user:
+            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
+        
+        data = request.json or {}
+        
+        # User alanları
+        if "is_admin" in data:
+            user.is_admin = data["is_admin"]
+            user.role = "admin" if data["is_admin"] else "user"
+        
+        if "is_active" in data:
+            user.is_active = data["is_active"]
+        
+        await user.save()
+        
+        # Profile alanları
+        if user.profile:
+            if "full_name" in data:
+                user.profile.full_name = data["full_name"]
+            if "bio" in data:
+                user.profile.bio = data["bio"]
+            if "department" in data:
+                user.profile.department = data["department"]
+            if "grade" in data:
+                user.profile.grade = data["grade"]
+            if "phone_number" in data:
+                user.profile.phone_number = data["phone_number"]
+            
+            await user.profile.save()
+        
+        return json({"basarili": True, "mesaj": "Kullanıcı başarıyla güncellendi."})
+    except Exception as e:
+        print(f"Kullanıcı güncelleme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Kullanıcı sil
+@app.delete("/api/admin/users/<user_id:int>")
+@admin_required()
+async def admin_delete_user(request, user_id):
+    """Kullanıcıyı sil"""
+    try:
+        user = await User.get_or_none(user_id=user_id)
+        if not user:
+            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
+        
+        # Kendini silmeyi engelle
+        if request.ctx.user_id == user_id:
+            return json({"basarili": False, "mesaj": "Kendi hesabınızı silemezsiniz."}, status=400)
+        
+        await user.delete()
+        
+        return json({"basarili": True, "mesaj": "Kullanıcı başarıyla silindi."})
+    except Exception as e:
+        print(f"Kullanıcı silme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# -------------------------------------------------
+# 🔥 ADMIN PANELİ - ETKİNLİK YÖNETİMİ
+# -------------------------------------------------
+
+# Tüm etkinlikleri listele (admin için)
+@app.get("/api/admin/events")
+@admin_required()
+async def admin_list_events(request):
+    """Tüm etkinlikleri listele (aktif + pasif)"""
+    try:
+        events = await Event.all().prefetch_related("university").order_by("-created_at")
+        
+        events_list = []
+        for event in events:
+            events_list.append({
+                "event_id": event.event_id,
+                "title": event.title,
+                "description": event.description,
+                "location": event.location,
+                "university": event.university.name if event.university else None,
+                "start_datetime": event.start_datetime.isoformat() if event.start_datetime else None,
+                "end_datetime": event.end_datetime.isoformat() if event.end_datetime else None,
+                "is_active": event.is_active,
+                "image_url": event.image_url,
+                "max_participants": event.max_participants,
+                "created_at": event.created_at.isoformat() if event.created_at else None,
+            })
+        
+        return json({"basarili": True, "count": len(events_list), "events": events_list})
+    except Exception as e:
+        print(f"Etkinlik listeleme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Etkinlik oluştur
+@app.post("/api/admin/events")
+@admin_required()
+async def admin_create_event(request):
+    """Yeni etkinlik oluştur"""
+    try:
+        data = request.json or {}
+        
+        title = (data.get("title") or "").strip()
+        description = (data.get("description") or "").strip()
+        location = (data.get("location") or "").strip()
+        university_id = data.get("university_id")
+        start_datetime = data.get("start_datetime")
+        end_datetime = data.get("end_datetime")
+        image_url = data.get("image_url", "")
+        max_participants = data.get("max_participants")
+        
+        if not title:
+            return json({"basarili": False, "mesaj": "Başlık gerekli."}, status=400)
+        
+        # Datetime dönüşümü
+        start_dt = datetime.fromisoformat(start_datetime) if start_datetime else None
+        end_dt = datetime.fromisoformat(end_datetime) if end_datetime else None
+        
+        event = await Event.create(
+            title=title,
+            description=description,
+            location=location,
+            university_id=university_id,
+            start_datetime=start_dt,
+            end_datetime=end_dt,
+            image_url=image_url,
+            max_participants=max_participants,
+            is_active=True
+        )
+        
+        return json({
+            "basarili": True,
+            "mesaj": "Etkinlik başarıyla oluşturuldu.",
+            "event_id": event.event_id
+        }, status=201)
+    except Exception as e:
+        print(f"Etkinlik oluşturma hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Etkinlik güncelle
+@app.put("/api/admin/events/<event_id:int>")
+@admin_required()
+async def admin_update_event(request, event_id):
+    """Etkinlik bilgilerini güncelle"""
+    try:
+        event = await Event.get_or_none(event_id=event_id)
+        if not event:
+            return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
+        
+        data = request.json or {}
+        
+        if "title" in data:
+            event.title = data["title"]
+        if "description" in data:
+            event.description = data["description"]
+        if "location" in data:
+            event.location = data["location"]
+        if "university_id" in data:
+            event.university_id = data["university_id"]
+        if "is_active" in data:
+            event.is_active = data["is_active"]
+        if "image_url" in data:  # 🔥 Fotoğraf güncelleme
+            event.image_url = data["image_url"]
+            # Sadece fotoğraf gerçekten yüklendiğinde log yaz
+            if data["image_url"]:
+                print(f"✅ Etkinlik {event_id} için fotoğraf güncellendi (size: {len(data['image_url'])} chars)")
+        
+        if "max_participants" in data:
+            event.max_participants = data["max_participants"]
+        
+        if "start_datetime" in data and data["start_datetime"]:
+            event.start_datetime = datetime.fromisoformat(data["start_datetime"])
+        
+        if "end_datetime" in data and data["end_datetime"]:
+            event.end_datetime = datetime.fromisoformat(data["end_datetime"])
+        
+        await event.save()
+        
+        return json({"basarili": True, "mesaj": "Etkinlik başarıyla güncellendi."})
+    except Exception as e:
+        print(f"Etkinlik güncelleme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Etkinlik sil
+@app.delete("/api/admin/events/<event_id:int>")
+@admin_required()
+async def admin_delete_event(request, event_id):
+    """Etkinliği sil"""
+    try:
+        event = await Event.get_or_none(event_id=event_id)
+        if not event:
+            return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
+        
+        await event.delete()
+        
+        return json({"basarili": True, "mesaj": "Etkinlik başarıyla silindi."})
+    except Exception as e:
+        print(f"Etkinlik silme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# -------------------------------------------------
+# 🔥 ADMIN PANELİ - MESAJ YÖNETİMİ
+# -------------------------------------------------
+
+# Tüm iletişim mesajlarını listele
+@app.get("/api/admin/messages")
+@admin_required()
+async def admin_list_messages(request):
+    """Tüm iletişim mesajlarını listele"""
+    try:
+        messages = await ContactMessages.all().prefetch_related("user_type", "topic_type").order_by("-created_at")
+        
+        messages_list = []
+        for msg in messages:
+            messages_list.append({
+                "contact_id": msg.contact_id,
+                "full_name": msg.full_name,
+                "email": msg.email,
+                "university": msg.university,
+                "user_type": msg.user_type.label if msg.user_type else None,
+                "topic_type": msg.topic_type.label if msg.topic_type else None,
+                "message": msg.message,
+                "consent": msg.consent,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
+            })
+        
+        return json({"basarili": True, "count": len(messages_list), "messages": messages_list})
+    except Exception as e:
+        print(f"Mesaj listeleme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Mesaj sil
+@app.delete("/api/admin/messages/<contact_id:int>")
+@admin_required()
+async def admin_delete_message(request, contact_id):
+    """İletişim mesajını sil"""
+    try:
+        message = await ContactMessages.get_or_none(contact_id=contact_id)
+        if not message:
+            return json({"basarili": False, "mesaj": "Mesaj bulunamadı."}, status=404)
+        
+        await message.delete()
+        
+        return json({"basarili": True, "mesaj": "Mesaj başarıyla silindi."})
+    except Exception as e:
+        print(f"Mesaj silme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# -------------------------------------------------
+# 🔥 ADMIN PANELİ - FEEDBACK YÖNETİMİ
+# -------------------------------------------------
+
+# Tüm feedbackleri listele
+@app.get("/api/admin/feedbacks")
+@admin_required()
+async def admin_list_feedbacks(request):
+    """Tüm feedbackleri listele"""
+    try:
+        feedbacks = await Feedback.all().prefetch_related("user", "event").order_by("-created_at")
+        
+        feedbacks_list = []
+        for fb in feedbacks:
+            feedbacks_list.append({
+                "feedback_id": fb.feedback_id,
+                "user_email": fb.user.email if fb.user else None,
+                "event_title": fb.event.title if fb.event else None,
+                "type": fb.type,
+                "title": fb.title,
+                "message": fb.message,
+                "status": fb.status,
+                "created_at": fb.created_at.isoformat() if fb.created_at else None,
+            })
+        
+        return json({"basarili": True, "count": len(feedbacks_list), "feedbacks": feedbacks_list})
+    except Exception as e:
+        print(f"Feedback listeleme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Feedback durumu güncelle
+@app.put("/api/admin/feedbacks/<feedback_id:int>")
+@admin_required()
+async def admin_update_feedback(request, feedback_id):
+    """Feedback durumunu güncelle"""
+    try:
+        feedback = await Feedback.get_or_none(feedback_id=feedback_id)
+        if not feedback:
+            return json({"basarili": False, "mesaj": "Feedback bulunamadı."}, status=404)
+        
+        data = request.json or {}
+        
+        if "status" in data:
+            feedback.status = data["status"]
+        
+        await feedback.save()
+        
+        return json({"basarili": True, "mesaj": "Feedback durumu güncellendi."})
+    except Exception as e:
+        print(f"Feedback güncelleme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Feedback sil
+@app.delete("/api/admin/feedbacks/<feedback_id:int>")
+@admin_required()
+async def admin_delete_feedback(request, feedback_id):
+    """Feedback'i sil"""
+    try:
+        feedback = await Feedback.get_or_none(feedback_id=feedback_id)
+        if not feedback:
+            return json({"basarili": False, "mesaj": "Feedback bulunamadı."}, status=404)
+        
+        await feedback.delete()
+        
+        return json({"basarili": True, "mesaj": "Feedback başarıyla silindi."})
+    except Exception as e:
+        print(f"Feedback silme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# -------------------------------------------------
+# 🔥 ÜNİVERSİTE Lİ STESİ (ADMIN İÇİN)
+# -------------------------------------------------
+@app.get("/api/admin/universities")
+@admin_required()
+async def admin_list_universities(request):
+    """Tüm üniversiteleri listele"""
+    try:
+        universities = await University.all().order_by("name")
+        
+        universities_list = []
+        for uni in universities:
+            universities_list.append({
+                "university_id": uni.university_id,
+                "name": uni.name,
+                "logo_url": uni.logo_url,
+            })
+        
+        return json({"basarili": True, "count": len(universities_list), "universities": universities_list})
+    except Exception as e:
+        print(f"Üniversite listeleme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Üniversite logosunu güncelle
+@app.put("/api/admin/universities/<university_id:int>")
+@admin_required()
+async def admin_update_university(request, university_id):
+    """Üniversite logosu güncelle"""
+    try:
+        university = await University.get_or_none(university_id=university_id)
+        if not university:
+            return json({"basarili": False, "mesaj": "Üniversite bulunamadı."}, status=404)
+        
+        data = request.json or {}
+        logo_url = data.get("logo_url", "")
+        
+        university.logo_url = logo_url
+        await university.save()
+        
+        return json({"basarili": True, "mesaj": "Üniversite logosu güncellendi."})
+    except Exception as e:
+        print(f"Üniversite güncelleme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Yeni üniversite ekle
+@app.post("/api/admin/universities")
+@admin_required()
+async def admin_create_university(request):
+    """Yeni üniversite ekle"""
+    try:
+        data = request.json or {}
+        name = data.get("name", "").strip()
+        logo_url = data.get("logo_url", "").strip()
+        
+        if not name:
+            return json({"basarili": False, "mesaj": "Üniversite adı gerekli."}, status=400)
+        
+        # Aynı isimde üniversite var mı kontrol et
+        existing = await University.get_or_none(name=name)
+        if existing:
+            return json({"basarili": False, "mesaj": "Bu isimde bir üniversite zaten mevcut."}, status=409)
+        
+        university = await University.create(name=name, logo_url=logo_url)
+        
+        return json({
+            "basarili": True, 
+            "mesaj": "Üniversite başarıyla eklendi.",
+            "university": {
+                "university_id": university.university_id,
+                "name": university.name,
+                "logo_url": university.logo_url
+            }
+        }, status=201)
+    except Exception as e:
+        print(f"Üniversite ekleme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Üniversite sil
+@app.delete("/api/admin/universities/<university_id:int>")
+@admin_required()
+async def admin_delete_university(request, university_id):
+    """Üniversite sil"""
+    try:
+        university = await University.get_or_none(university_id=university_id)
+        if not university:
+            return json({"basarili": False, "mesaj": "Üniversite bulunamadı."}, status=404)
+        
+        # Üniversiteye bağlı etkinlikler var mı kontrol et
+        events_count = await Event.filter(university_id=university_id).count()
+        if events_count > 0:
+            return json({
+                "basarili": False, 
+                "mesaj": f"Bu üniversiteye bağlı {events_count} etkinlik var. Önce etkinlikleri silin veya başka bir üniversiteye taşıyın."
+            }, status=400)
+        
+        await university.delete()
+        
+        return json({"basarili": True, "mesaj": "Üniversite başarıyla silindi."})
+    except Exception as e:
+        print(f"Üniversite silme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+
+# -------------------------------------------------
+# 🔥 KULLANICI BAN/UNBAN İŞLEMLERİ
+# -------------------------------------------------
+
+# Kullanıcıyı banla
+@app.post("/api/admin/users/<user_id:int>/ban")
+@admin_required()
+async def ban_user(request, user_id):
+    """Kullanıcıyı geçici veya kalıcı olarak banla"""
+    try:
+        user = await User.get_or_none(user_id=user_id)
+        if not user:
+            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
+        
+        # Kendini banlama kontrolü
+        if request.ctx.user_id == user_id:
+            return json({"basarili": False, "mesaj": "Kendinizi banlayamazsınız."}, status=400)
+        
+        data = request.json or {}
+        ban_reason = data.get("ban_reason", "Belirsiz neden")
+        ban_until = data.get("ban_until")  # ISO format datetime string veya None (kalıcı ban)
+        
+        user.is_banned = True
+        user.ban_reason = ban_reason
+        
+        
+        if ban_until:
+            # Frontend'den gelen datetime'ı Istanbul timezone'a çevir
+            ban_datetime_istanbul = to_istanbul_datetime(ban_until)
+            
+            # VERİTABANINA UTC OLARAK KAYDET (Tortoise ORM gereksinimi)
+            ban_datetime_utc = ban_datetime_istanbul.astimezone(pytz.UTC)
+            user.ban_until = ban_datetime_utc
+            
+            # Kullanıcı dostu log mesajı
+            print(f"✅ Ban süresi kaydedildi (Istanbul): {ban_datetime_istanbul.strftime('%Y-%m-%d %H:%M')} - Ban bu saatte otomatik kalkacak")
+        else:
+            user.ban_until = None  # Kalıcı ban
+
+        
+        await user.save()
+        
+        return json({"basarili": True, "mesaj": "Kullanıcı başarıyla banlandı."})
+    except Exception as e:
+        print(f"Ban hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# Kullanıcının banını kaldır
+@app.post("/api/admin/users/<user_id:int>/unban")
+@admin_required()
+async def unban_user(request, user_id):
+    """Kullanıcının banını kaldır"""
+    try:
+        user = await User.get_or_none(user_id=user_id)
+        if not user:
+            return json({"basarili": False, "mesaj": "Kullanıcı bulunamadı."}, status=404)
+        
+        user.is_banned = False
+        user.ban_reason = None
+        user.ban_until = None
+        await user.save()
+        
+        return json({"basarili": True, "mesaj": "Ban kaldırıldı."})
+    except Exception as e:
+        print(f"Unban hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
+
+# -------------------------------------------------
+# 🔥 ETKİNLİK DETAYLI GÜNCELLEME (FOTOĞRAF DAHİL)
+# -------------------------------------------------
+
+# Etkinlik detaylarını getir (güncelleme için)
+@app.get("/api/admin/events/<event_id:int>/edit")
+@admin_required()
+async def get_event_for_edit(request, event_id):
+    """Etkinlik bilgilerini düzenleme için getir"""
+    try:
+        event = await Event.get_or_none(event_id=event_id).prefetch_related("university")
+        if not event:
+            return json({"basarili": False, "mesaj": "Etkinlik bulunamadı."}, status=404)
+        
+        return json({
+            "basarili": True,
+            "event": {
+                "event_id": event.event_id,
+                "title": event.title,
+                "description": event.description,
+                "location": event.location,
+                "image_url": event.image_url,
+                "university_id": event.university_id,
+                "university_name": event.university.name if event.university else None,
+                "start_datetime": event.start_datetime.isoformat() if event.start_datetime else None,
+                "end_datetime": event.end_datetime.isoformat() if event.end_datetime else None,
+                "is_active": event.is_active,
+                "max_participants": event.max_participants,
+            }
+        })
+    except Exception as e:
+        print(f"Etkinlik getirme hatası: {e}")
+        return json({"basarili": False, "mesaj": str(e)}, status=500)
+
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=8000)

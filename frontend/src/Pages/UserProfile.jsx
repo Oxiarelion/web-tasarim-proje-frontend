@@ -388,7 +388,7 @@ export default function UserProfile() {
                         <div className="pp__eventImgWrap">
                           <img
                             className="pp__eventImg"
-                            src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=1200"
+                            src={ev.image_url || "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=1200"}
                             alt={ev.title}
                           />
                           <span className="pp__tag">

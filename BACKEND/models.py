@@ -8,6 +8,10 @@ class User(models.Model):
     
     role = fields.CharField(max_length=50, default='user') 
     is_active = fields.BooleanField(default=True)
+    is_admin = fields.BooleanField(default=False)  # 🔥 Admin kontrolü için
+    is_banned = fields.BooleanField(default=False)  # 🔥 Ban durumu
+    ban_reason = fields.CharField(max_length=500, null=True)  # Ban nedeni
+    ban_until = fields.DatetimeField(null=True)  # Ban bitiş tarihi
     created_at = fields.DatetimeField(auto_now_add=True)
     last_login = fields.DatetimeField(null=True)
 
@@ -51,6 +55,7 @@ class Event(models.Model):
     title = fields.CharField(max_length=255)
     description = fields.TextField(null=True)
     location = fields.CharField(max_length=255, null=True)
+    image_url = fields.TextField(null=True)  # 🔥 Etkinlik fotoğrafı (base64 veya URL)
     
     start_datetime = fields.DatetimeField(null=True)
     end_datetime = fields.DatetimeField(null=True)
@@ -60,6 +65,9 @@ class Event(models.Model):
 
     created_at = fields.DatetimeField(auto_now_add=True)
     is_active = fields.BooleanField(default=True)
+    
+    # Maksimum katılımcı sayısı
+    max_participants = fields.IntField(null=True)
     
     class Meta:
         table = "events"

@@ -91,7 +91,7 @@ export default function EventDetails() {
       {/* --- Geri Dön Butonu (FIXED SOL ALTI) --- */}
       <button
         className="ed-back-btn"
-        onClick={() => navigate("/tum-etkinlikler")}
+        onClick={() => navigate(-1)}
       >
         ← Dön
       </button>
@@ -102,16 +102,10 @@ export default function EventDetails() {
           <div className="ed-card">
             <div className="ed-image-wrap">
               <img
-                src={DEFAULT_EVENT_IMG}
+                src={event.image_url || DEFAULT_EVENT_IMG}
                 alt="Etkinlik"
                 className="ed-image"
               />
-              <div className="ed-uni-badge">
-                {event.university_logo && (
-                  <img src={event.university_logo} alt="logo" />
-                )}
-                {event.university}
-              </div>
             </div>
 
             <div className="ed-info">

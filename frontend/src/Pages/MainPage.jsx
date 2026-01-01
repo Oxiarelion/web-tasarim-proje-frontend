@@ -301,7 +301,7 @@ const MainPage = () => {
 
             <li>
               <a
-                onClick={() => scrollToSection("universite")}
+                onClick={() => navigate("/universiteler")}
                 style={{ cursor: "pointer" }}
               >
                 Üniversite
@@ -320,10 +320,18 @@ const MainPage = () => {
 
             <li>
               <a
-                onClick={() => scrollToSection("iletisim")}
+                onClick={() => navigate("/feedback")}
                 style={{ cursor: "pointer" }}
               >
-                İletişim
+                İstek & Şikayet
+              </a>
+            </li>
+            <li>
+              <a
+                onClick={() => navigate("/sss")}
+                style={{ cursor: "pointer" }}
+              >
+                SSS
               </a>
             </li>
             <li>
@@ -363,60 +371,69 @@ const MainPage = () => {
             {/* ETKİNLİKLER BÖLÜMÜ ID */}
             <div className="events-grid" id="etkinlikler">
               {dbEtkinlikler.length > 0 ? (
-                dbEtkinlikler.map((etkinlik, index) => {
-                  let gun = "??",
-                    ayAdi = "AY";
-                  if (etkinlik.date) {
-                    const parcalar = etkinlik.date.split("-");
-                    if (parcalar.length === 3) {
-                      gun = parcalar[2];
-                      ayAdi = ayIsimleri[parseInt(parcalar[1]) - 1] || "AY";
+                dbEtkinlikler
+                  .filter((etkinlik) => {
+                    // Sadece gelecek etkinlikleri göster (bugünden sonra)
+                    if (!etkinlik.date) return false;
+                    const bugün = new Date();
+                    bugün.setHours(0, 0, 0, 0);
+                    const etkinlikTarihi = new Date(etkinlik.date);
+                    return etkinlikTarihi >= bugün;
+                  })
+                  .map((etkinlik, index) => {
+                    let gun = "??",
+                      ayAdi = "AY";
+                    if (etkinlik.date) {
+                      const parcalar = etkinlik.date.split("-");
+                      if (parcalar.length === 3) {
+                        gun = parcalar[2];
+                        ayAdi = ayIsimleri[parseInt(parcalar[1]) - 1] || "AY";
+                      }
                     }
-                  }
-                  const isFav = favoriler.includes(etkinlik.id);
+                    const isFav = favoriler.includes(etkinlik.id);
 
-                  return (
-                    <div
-                      key={index}
-                      className="etkinlik-kutu"
-                      // TIKLAMA KAPALI
-                    >
-                      <div className="kutu-header">
-                        <div className="kutu-tarih">
-                          <span className="kutu-gun">{gun}</span>
-                          <span className="kutu-ay">{ayAdi}</span>
+                    return (
+                      <div
+                        key={index}
+                        className="etkinlik-kutu"
+                        // TIKLAMA KAPALI
+                      >
+                        <div className="kutu-header">
+                          <div className="kutu-tarih">
+                            <span className="kutu-gun">{gun}</span>
+                            <span className="kutu-ay">{ayAdi}</span>
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <h3 className="kutu-baslik">{etkinlik.title}</h3>
+                            {etkinlik.university && (
+                              <span className="kutu-uni">
+                                {etkinlik.university}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            className={`fav-btn ${isFav ? "active" : ""}`}
+                            onClick={() => toggleFavori(etkinlik)}
+                          >
+                            {isFav ? "❤️" : "🤍"}
+                          </button>
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <h3 className="kutu-baslik">{etkinlik.title}</h3>
-                          {etkinlik.university && (
-                            <span className="kutu-uni">
-                              {etkinlik.university}
-                            </span>
-                          )}
+                        <div>
+                          <p className="kutu-desc">
+                            {etkinlik.description || "Açıklama yok."}
+                          </p>
+                          <p className="kutu-footer">
+                            📍 {etkinlik.location || "Konum Yok"}
+                            {etkinlik.time && (
+                              <span style={{ float: "right" }}>
+                                🕒 {etkinlik.time.substring(0, 5)}
+                              </span>
+                            )}
+                          </p>
                         </div>
-                        <button
-                          className={`fav-btn ${isFav ? "active" : ""}`}
-                          onClick={() => toggleFavori(etkinlik)}
-                        >
-                          {isFav ? "❤️" : "🤍"}
-                        </button>
                       </div>
-                      <div>
-                        <p className="kutu-desc">
-                          {etkinlik.description || "Açıklama yok."}
-                        </p>
-                        <p className="kutu-footer">
-                          📍 {etkinlik.location || "Konum Yok"}
-                          {etkinlik.time && (
-                            <span style={{ float: "right" }}>
-                              🕒 {etkinlik.time.substring(0, 5)}
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })
+                    );
+                  })
               ) : (
                 <div className="empty-state">
                   <h3>⚠️ Etkinlik Bulunamadı</h3>
@@ -447,7 +464,7 @@ const MainPage = () => {
             >
               <h3>Bizimle İletişime Geçin</h3>
               <p>Campushub06 ekibi olarak her zaman yanınızdayız.</p>
-              <p>📧 info@campushub06.com</p>
+              <p>📧 campushub06@gmail.com</p>
             </div>
           </div>
 

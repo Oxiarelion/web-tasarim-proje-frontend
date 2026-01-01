@@ -199,6 +199,9 @@ html {
   ); /* Responsive Kutular */
   gap: 25px;
   width: 100%;
+  max-height: 70vh; /* Ekranın %70'i kadar yükseklik */
+  overflow-y: auto; /* Dikey scroll */
+  padding-right: 10px; /* Scrollbar için boşluk */
 }
 
 /* --- ETKİNLİK KUTUSU (CARD) --- */

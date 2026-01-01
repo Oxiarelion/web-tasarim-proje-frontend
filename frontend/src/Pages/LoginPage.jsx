@@ -49,7 +49,12 @@ const LoginPage = () => {
         if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
 
         setTimeout(() => {
-          navigate("/anasayfa", { replace: true });
+          // Admin ise admin paneline, değilse ana sayfaya yönlendir
+          if (data.user.is_admin) {
+            navigate("/admin", { replace: true });
+          } else {
+            navigate("/anasayfa", { replace: true });
+          }
         }, 1000);
       } else {
         setMesaj("❌ " + (data.mesaj || "Giriş başarısız."));

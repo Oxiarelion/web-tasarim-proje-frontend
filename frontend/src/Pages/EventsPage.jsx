@@ -235,10 +235,10 @@ const EventsPage = () => {
               </a>
             </li>
 
-            {/* Üniversite - Bu sayfadaki filtreye kaydırır */}
+            {/* Üniversite */}
             <li>
               <a
-                onClick={() => scrollToSection("universite")}
+                onClick={() => navigate("/universiteler")}
                 style={{ cursor: "pointer" }}
               >
                 Üniversite
@@ -251,13 +251,21 @@ const EventsPage = () => {
               </a>
             </li>
 
-            {/* İletişim - Bu sayfadaki footera kaydırır */}
             <li>
               <a
-                onClick={() => scrollToSection("iletisim")}
+                onClick={() => navigate("/feedback")}
                 style={{ cursor: "pointer" }}
               >
-                İletişim
+                İstek & Şikayet
+              </a>
+            </li>
+
+            <li>
+              <a
+                onClick={() => navigate("/sss")}
+                style={{ cursor: "pointer" }}
+              >
+                SSS
               </a>
             </li>
 
@@ -382,7 +390,7 @@ const EventsPage = () => {
           >
             <h3>Bizimle İletişime Geçin</h3>
             <p>Campushub06 ekibi olarak her zaman yanınızdayız.</p>
-            <p>📧 info@campushub06.com</p>
+            <p>📧 campushub06@gmail.com</p>
           </div>
         </div>
       </div>
